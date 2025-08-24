@@ -9,11 +9,11 @@
     "ghcr.io/devcontainers/features/node:1": {},
     "ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
     "ghcr.io/EliiseS/devcontainer-features/bash-profile:1": {
-        "command": "alias cfa=npx claude-flow@alpha"
+        "command": "alias cfa=\"npx claude-flow@alpha\"" 
     }
   },
   "postCreateCommand": "npm install -g @anthropic-ai/claude-code && claude doctor",
-  "postStartCommand": "bash -c 'if ! claude doctor >/dev/null 2>&1; then echo \"⚠️  Claude not authenticated. Run \\\"claude login\\\" or set ANTHROPIC_API_KEY.\"; fi'",
+  "postStartCommand": "bash -c 'if ! claude doctor >/dev/null 2>&1; then echo \"⚠️  Claude not authenticated. Run \\\"claude login\\\" or set ANTHROPIC_API_KEY.\"; else echo OK; fi'",
 
   "customizations": {
     "vscode": {
