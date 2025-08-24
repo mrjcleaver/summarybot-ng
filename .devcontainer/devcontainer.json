@@ -1,0 +1,22 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/base:debian",
+  "runArgs": [
+    "--privileged"
+  ],
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rooveterinaryinc.roo-cline",
+        "vsls-contrib.gistfs",
+        "github.copilot",
+        "github.copilot-chat"
+      ]
+    }
+  },
+  "shutdownAction": "none"
+}
