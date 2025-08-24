@@ -8,9 +8,13 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/node:1": {}
   },
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code && claude doctor",
+  "postStartCommand": "bash -c 'if ! claude doctor >/dev/null 2>&1; then echo \"⚠️  Claude not authenticated. Run \\\"claude login\\\" or set ANTHROPIC_API_KEY.\"; fi'",
+
   "customizations": {
     "vscode": {
       "extensions": [
+        "anthropic.claude-code",
         "rooveterinaryinc.roo-cline",
         "vsls-contrib.gistfs",
         "github.copilot",
