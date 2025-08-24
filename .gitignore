@@ -139,6 +139,7 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Claude Flow generated files
+.claude-flow/metrics/*
 .claude/settings.local.json
 .mcp.json
 claude-flow.config.json
@@ -162,4 +163,3 @@ claude-flow
 claude-flow.bat
 claude-flow.ps1
 hive-mind-prompt-*.txt
-.claude-flow/metrics/*

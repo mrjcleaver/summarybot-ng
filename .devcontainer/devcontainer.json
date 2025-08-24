@@ -22,7 +22,8 @@
         "rooveterinaryinc.roo-cline",
         "vsls-contrib.gistfs",
         "github.copilot",
-        "github.copilot-chat"
+        "github.copilot-chat",
+        "bierner.markdown-mermaid"
       ]
     }
   },
