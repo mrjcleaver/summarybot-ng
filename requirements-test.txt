@@ -1,0 +1,63 @@
+# Testing framework and core testing dependencies
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-html>=3.2.0
+pytest-xdist>=3.3.0  # For parallel test execution
+pytest-watch>=4.2.0  # For watch mode during development
+
+# Performance and benchmarking
+pytest-benchmark>=4.0.0
+pytest-profiling>=1.7.0
+memory-profiler>=0.61.0
+psutil>=5.9.0
+
+# Security testing
+bandit>=1.7.5
+safety>=2.4.0
+
+# Code quality and formatting
+flake8>=6.0.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.5.0
+
+# Mocking and test utilities
+responses>=0.23.0
+freezegun>=1.2.0
+factory-boy>=3.3.0
+faker>=19.6.0
+
+# Discord.py testing utilities
+discord.py>=2.3.0
+
+# HTTP client testing
+httpx>=0.24.0
+aioresponses>=0.7.4
+
+# Database testing
+aiosqlite>=0.19.0
+pytest-postgresql>=5.0.0
+
+# Redis testing (if using Redis cache)
+fakeredis>=2.18.0
+
+# JWT and crypto testing
+pyjwt>=2.8.0
+cryptography>=41.0.0
+
+# Web framework testing
+fastapi>=0.103.0
+starlette>=0.27.0
+
+# Additional utilities for comprehensive testing
+pydantic>=2.3.0
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+jsonschema>=4.19.0
+
+# Development and debugging tools
+ipdb>=0.13.13
+pytest-sugar>=0.9.7  # Better test output formatting
+pytest-clarity>=1.0.1  # Better assertion output
