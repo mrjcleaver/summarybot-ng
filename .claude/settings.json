@@ -17,7 +17,7 @@
       "Bash(git diff :*)",
       "Bash(git log :*)",
       "Bash(git add :*)",
-      "Bash(git commit *)",
+      "Bash(git commit :*)",
       "Bash(git push)",
       "Bash(git config :*)",
       "Bash(git tag :*)",
@@ -31,10 +31,7 @@
       "Bash(ls :*)"
     ],
     "deny": [
-      "Bash(rm -rf /)",
-      "Bash(curl :* | bash)",
-      "Bash(wget :* | sh)",
-      "Bash(eval :*)"
+      "Bash(rm -rf /)"
     ]
   },
   "hooks": {
