@@ -5,7 +5,7 @@ This module provides structured error handling with context-aware exceptions
 and proper error reporting capabilities.
 """
 
-from .base import SummaryBotException, ErrorContext
+from .base import SummaryBotException, ErrorContext, create_error_context
 from .summarization import (
     SummarizationError, ClaudeAPIError, InsufficientContentError,
     PromptTooLongError, TokenLimitExceededError
@@ -15,8 +15,9 @@ from .discord_errors import (
     BotPermissionError, RateLimitExceededError
 )
 from .api_errors import (
-    APIError, AuthenticationError, RateLimitError, 
-    NetworkError, TimeoutError
+    APIError, AuthenticationError, RateLimitError,
+    NetworkError, TimeoutError, ModelUnavailableError,
+    ServiceUnavailableError
 )
 from .validation import (
     ValidationError, ConfigurationError, InvalidInputError,
@@ -28,6 +29,7 @@ __all__ = [
     # Base exceptions
     'SummaryBotException',
     'ErrorContext',
+    'create_error_context',
     
     # Summarization errors
     'SummarizationError',
@@ -49,6 +51,8 @@ __all__ = [
     'RateLimitError',
     'NetworkError',
     'TimeoutError',
+    'ModelUnavailableError',
+    'ServiceUnavailableError',
     
     # Validation errors
     'ValidationError',

@@ -44,7 +44,12 @@ class WebhookRequest(BaseModel):
     user_agent: Optional[str] = None
     received_at: datetime = field(default_factory=datetime.utcnow)
     processed: bool = False
-    
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """Get API key from request (convenience property for validators)."""
+        return self.get_auth_token()
+
     def get_auth_token(self) -> Optional[str]:
         """Extract authentication token from headers."""
         auth_header = self.headers.get("Authorization", "")
@@ -144,9 +149,9 @@ class WebhookResponse(BaseModel):
 @dataclass
 class WebhookDelivery(BaseModel):
     """Outgoing webhook delivery."""
-    id: str = field(default_factory=generate_id)
     event: WebhookEvent
     url: str
+    id: str = field(default_factory=generate_id)
     payload: Dict[str, Any] = field(default_factory=dict)
     headers: Dict[str, str] = field(default_factory=dict)
     status: WebhookStatus = WebhookStatus.PENDING

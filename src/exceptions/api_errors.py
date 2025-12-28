@@ -148,12 +148,12 @@ class InvalidResponseError(APIError):
 
 class PayloadTooLargeError(APIError):
     """Raised when request payload exceeds API limits."""
-    
+
     def __init__(self, api_name: str, payload_size: int, max_size: int,
                  context: Optional[ErrorContext] = None):
         self.payload_size = payload_size
         self.max_size = max_size
-        
+
         super().__init__(
             message=f"Payload too large for {api_name}: {payload_size} bytes (max {max_size})",
             error_code="PAYLOAD_TOO_LARGE",
@@ -162,5 +162,25 @@ class PayloadTooLargeError(APIError):
             context=context,
             retryable=False
         )
-        
+
         self.user_message = "Request is too large. Please try with fewer messages or shorter content."
+
+
+class ModelUnavailableError(RecoverableError):
+    """Raised when a specific AI model is unavailable."""
+
+    def __init__(self, model_name: str, available_models: Optional[list] = None,
+                 context: Optional[ErrorContext] = None):
+        self.model_name = model_name
+        self.available_models = available_models or []
+
+        available_text = ""
+        if self.available_models:
+            available_text = f" Available models: {', '.join(self.available_models)}"
+
+        super().__init__(
+            message=f"Model '{model_name}' is not available.{available_text}",
+            error_code="MODEL_UNAVAILABLE",
+            context=context,
+            user_message=f"The requested AI model is not available. Please try again later or use a different model."
+        )

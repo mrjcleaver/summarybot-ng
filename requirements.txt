@@ -1,27 +1,43 @@
-# Core dependencies
+# Core Discord Integration
 discord.py>=2.3.0
+
+# AI/ML - Claude API
 anthropic>=0.5.0
+
+# Web Framework - REST API
 fastapi>=0.104.0
 uvicorn>=0.24.0
 
-# Configuration and environment
+# Configuration and Environment
 python-dotenv>=1.0.0
 pydantic>=2.5.0
 
-# Database and caching
-aiosqlite>=0.19.0
-redis>=5.0.0
+# Database Support
+aiosqlite>=0.19.0          # Async SQLite driver
+redis>=5.0.0               # Optional: Redis cache backend
 
-# Task scheduling
-apscheduler>=3.10.0
+# Task Scheduling
+apscheduler>=3.10.0        # Automated task scheduling
 
-# Development and testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-black>=23.0.0
-flake8>=6.0.0
-mypy>=1.7.0
+# Authentication & Security
+python-jose[cryptography]>=3.3.0  # JWT tokens
+python-multipart>=0.0.6           # File upload support
 
-# Optional dependencies
-html2text>=2020.1.16  # For message content cleaning
-aiohttp>=3.9.0        # For webhook delivery
+# HTTP Client
+aiohttp>=3.9.0             # Async HTTP for webhook delivery
+
+# Utilities
+html2text>=2020.1.16       # HTML to text conversion for message cleaning
+
+# Development and Testing
+pytest>=7.4.0              # Testing framework
+pytest-asyncio>=0.21.0     # Async test support
+pytest-cov>=4.1.0          # Code coverage
+black>=23.0.0              # Code formatting
+flake8>=6.0.0              # Linting
+mypy>=1.7.0                # Type checking
+httpx>=0.25.0              # HTTP client for testing FastAPI
+
+# Optional: PostgreSQL support (uncomment if needed)
+# asyncpg>=0.29.0          # Async PostgreSQL driver
+# sqlalchemy>=2.0.0        # ORM (if using PostgreSQL)

@@ -1,0 +1,310 @@
+"""
+Authentication middleware for webhook service.
+"""
+
+import logging
+import hashlib
+import hmac
+import time
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+
+from fastapi import Header, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+from pydantic import BaseModel
+
+from ..exceptions.webhook import WebhookAuthError
+from ..config.settings import BotConfig
+
+logger = logging.getLogger(__name__)
+
+# JWT configuration (will be overridden by config)
+JWT_SECRET = "your-secret-key-change-in-production"
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_MINUTES = 60
+
+# Rate limiting storage (in-memory for now)
+_rate_limit_store: Dict[str, list] = {}
+
+# Global config reference (will be set by server)
+_config: Optional[BotConfig] = None
+
+
+def set_config(config: BotConfig) -> None:
+    """Set global configuration for auth module.
+
+    Args:
+        config: Bot configuration
+    """
+    global _config, JWT_SECRET, JWT_EXPIRATION_MINUTES
+    _config = config
+    JWT_SECRET = config.webhook_config.jwt_secret
+    JWT_EXPIRATION_MINUTES = config.webhook_config.jwt_expiration_minutes
+
+
+class APIKeyAuth(BaseModel):
+    """API key authentication."""
+    api_key: str
+    user_id: Optional[str] = None
+    permissions: list = []
+
+
+class JWTAuth(BaseModel):
+    """JWT authentication."""
+    token: str
+    user_id: str
+    guild_id: Optional[str] = None
+    permissions: list = []
+    expires_at: datetime
+
+
+async def get_api_key_auth(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None)
+) -> APIKeyAuth:
+    """Validate API key authentication.
+
+    Args:
+        x_api_key: API key from X-API-Key header
+        authorization: Bearer token from Authorization header
+
+    Returns:
+        Validated API key auth
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    # Try X-API-Key header first
+    if x_api_key:
+        # Validate API key length
+        if not x_api_key or len(x_api_key) < 10:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API key format"
+            )
+
+        # Check against configured API keys
+        user_id = None
+        if _config and _config.webhook_config.api_keys:
+            user_id = _config.webhook_config.api_keys.get(x_api_key)
+            if not user_id:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid API key"
+                )
+        else:
+            # If no API keys configured, accept any valid format for development
+            user_id = "api-user"
+            logger.warning("No API keys configured - accepting any valid key format")
+
+        return APIKeyAuth(
+            api_key=x_api_key,
+            user_id=user_id,
+            permissions=["read", "write", "admin"]
+        )
+
+    # Try Authorization header with Bearer token
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+
+        try:
+            # Validate JWT
+            jwt_auth = await verify_jwt_token(token)
+
+            # Convert to APIKeyAuth for compatibility
+            return APIKeyAuth(
+                api_key=token,
+                user_id=jwt_auth.user_id,
+                permissions=jwt_auth.permissions
+            )
+        except JWTError as e:
+            logger.warning(f"JWT validation failed: {e}")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired token"
+            )
+
+    # No authentication provided
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication required. Provide X-API-Key or Authorization header."
+    )
+
+
+async def get_jwt_auth(
+    authorization: str = Header(None)
+) -> JWTAuth:
+    """Validate JWT authentication.
+
+    Args:
+        authorization: Bearer token from Authorization header
+
+    Returns:
+        Validated JWT auth
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header with Bearer token required"
+        )
+
+    token = authorization[7:]
+
+    try:
+        return await verify_jwt_token(token)
+    except JWTError as e:
+        logger.warning(f"JWT validation failed: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+
+async def verify_jwt_token(token: str) -> JWTAuth:
+    """Verify and decode JWT token.
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        Decoded JWT authentication
+
+    Raises:
+        JWTError: If token is invalid or expired
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+
+        user_id = payload.get("sub")
+        if not user_id:
+            raise JWTError("Token missing user ID")
+
+        expires_at = datetime.fromtimestamp(payload.get("exp", 0))
+        if expires_at < datetime.utcnow():
+            raise JWTError("Token expired")
+
+        return JWTAuth(
+            token=token,
+            user_id=user_id,
+            guild_id=payload.get("guild_id"),
+            permissions=payload.get("permissions", []),
+            expires_at=expires_at
+        )
+
+    except JWTError:
+        raise
+    except Exception as e:
+        raise JWTError(f"Token validation failed: {e}")
+
+
+def create_jwt_token(
+    user_id: str,
+    guild_id: Optional[str] = None,
+    permissions: list = None,
+    expires_minutes: int = JWT_EXPIRATION_MINUTES
+) -> str:
+    """Create a new JWT token.
+
+    Args:
+        user_id: User identifier
+        guild_id: Optional guild identifier
+        permissions: List of permissions
+        expires_minutes: Token expiration time in minutes
+
+    Returns:
+        Encoded JWT token
+    """
+    now = datetime.utcnow()
+    expires = now + timedelta(minutes=expires_minutes)
+
+    payload = {
+        "sub": user_id,
+        "iat": now.timestamp(),
+        "exp": expires.timestamp(),
+        "permissions": permissions or []
+    }
+
+    if guild_id:
+        payload["guild_id"] = guild_id
+
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def verify_webhook_signature(
+    payload: bytes,
+    signature: str,
+    secret: str
+) -> bool:
+    """Verify webhook signature.
+
+    Args:
+        payload: Request payload bytes
+        signature: Signature from X-Signature header
+        secret: Webhook secret key
+
+    Returns:
+        True if signature is valid
+    """
+    expected_signature = hmac.new(
+        secret.encode(),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(signature, expected_signature)
+
+
+def setup_rate_limiting(app, rate_limit: int = 100):
+    """Setup rate limiting middleware.
+
+    Args:
+        app: FastAPI application
+        rate_limit: Maximum requests per minute
+    """
+
+    @app.middleware("http")
+    async def rate_limit_middleware(request: Request, call_next):
+        """Rate limiting middleware."""
+        # Get client identifier (IP or API key)
+        client_id = request.headers.get("X-API-Key") or request.client.host
+
+        # Get current minute
+        current_minute = int(time.time() / 60)
+
+        # Initialize rate limit tracking
+        if client_id not in _rate_limit_store:
+            _rate_limit_store[client_id] = []
+
+        # Clean old entries
+        _rate_limit_store[client_id] = [
+            t for t in _rate_limit_store[client_id]
+            if t == current_minute
+        ]
+
+        # Check rate limit
+        request_count = len(_rate_limit_store[client_id])
+
+        if request_count >= rate_limit:
+            return HTTPException(
+                status_code=429,
+                detail={
+                    "error": "RATE_LIMIT_EXCEEDED",
+                    "message": f"Rate limit of {rate_limit} requests per minute exceeded",
+                    "retry_after": 60
+                }
+            )
+
+        # Add current request
+        _rate_limit_store[client_id].append(current_minute)
+
+        # Add rate limit headers
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(rate_limit)
+        response.headers["X-RateLimit-Remaining"] = str(rate_limit - request_count - 1)
+        response.headers["X-RateLimit-Reset"] = str((current_minute + 1) * 60)
+
+        return response

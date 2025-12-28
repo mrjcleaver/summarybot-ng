@@ -34,7 +34,9 @@ class SummaryOptions:
     claude_model: str = "claude-3-sonnet-20240229"
     temperature: float = 0.3
     max_tokens: int = 4000
-    
+    extract_action_items: bool = True
+    extract_technical_terms: bool = True
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -45,7 +47,9 @@ class SummaryOptions:
             'min_messages': self.min_messages,
             'claude_model': self.claude_model,
             'temperature': self.temperature,
-            'max_tokens': self.max_tokens
+            'max_tokens': self.max_tokens,
+            'extract_action_items': self.extract_action_items,
+            'extract_technical_terms': self.extract_technical_terms
         }
 
 
@@ -128,6 +132,9 @@ class WebhookConfig:
     enabled: bool = True
     cors_origins: List[str] = field(default_factory=list)
     rate_limit: int = 100  # requests per minute
+    jwt_secret: str = "change-this-in-production"  # JWT secret for token signing
+    jwt_expiration_minutes: int = 60
+    api_keys: Dict[str, str] = field(default_factory=dict)  # API key -> user_id mapping
     
 
 @dataclass
