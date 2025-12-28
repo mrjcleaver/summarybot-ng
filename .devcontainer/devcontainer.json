@@ -1,20 +1,22 @@
 {
   "image": "mcr.microsoft.com/devcontainers/base:bookworm",
   "runArgs": [
-    "--privileged"
   ],
   "remoteUser": "vscode",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/node:1": {},
     "ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
     "ghcr.io/EliiseS/devcontainer-features/bash-profile:1": {
         "command": "alias cfa='npx claude-flow@alpha'" 
+    },
+    "ghcr.io/itsmechlark/features/1password:1.5.0": {},
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+     "version": "3.11"
     }
   },
-  "postCreateCommand": "npm install -g @anthropic-ai/claude-code && claude doctor",
-  "postStartCommand": "bash -c 'if ! claude doctor >/dev/null 2>&1; then echo \"⚠️  Claude not authenticated. Run \\\"claude login\\\" or set ANTHROPIC_API_KEY.\"; else echo OK; fi'",
-
+  "postCreateCommand": "npm install -g @anthropic-ai/claude-code",
+  "postStartCommand": "bash -lc 'if [ -n \"$ANTHROPIC_API_KEY\" ]; then echo \"Claude key present\"; else echo \"⚠ Set ANTHROPIC_API_KEY or run claude login\"; fi'",
   "customizations": {
     "vscode": {
       "extensions": [
