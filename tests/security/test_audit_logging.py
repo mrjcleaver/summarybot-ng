@@ -183,7 +183,7 @@ class TestSecurityEventLogging:
             success=True,
             metadata={
                 "api_key": "sk_live_1234567890abcdef",
-                "discord_token": "MTk4NjIyNDgzNDcxOTI1MjQ4.Cl2FMQ.ZnCjm1XVW7vRze4b7Cq4se7kKWs",
+                "discord_token": "",
                 "password": "super_secret_password",
                 "user_email": "user@example.com",  # Not sensitive in this context
                 "message_count": 100
