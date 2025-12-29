@@ -1,22 +1,31 @@
 {
   "image": "mcr.microsoft.com/devcontainers/base:bookworm",
-  "runArgs": [
-  ],
+  "runArgs": [],
   "remoteUser": "vscode",
+
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
     "ghcr.io/EliiseS/devcontainer-features/bash-profile:1": {
-        "command": "alias cfa='npx claude-flow@alpha' && alias dsp='claude --dangerously-skip-permissions'" 
+      "command": "alias cfa='npx claude-flow@alpha' && alias dsp='claude --dangerously-skip-permissions'"
     },
     "ghcr.io/itsmechlark/features/1password:1.5.0": {},
     "ghcr.io/devcontainers/features/node:1": {},
     "ghcr.io/devcontainers/features/python:1": {
-     "version": "3.11"
+      "version": "3.11"
     }
   },
-  "postCreateCommand": "npm install -g @anthropic-ai/claude-code",
+
+  "containerEnv": {
+    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}",
+    "POETRY_VIRTUALENVS_IN_PROJECT": "true",
+    "POETRY_VIRTUALENVS_CREATE": "true"
+  },
+
+  "postCreateCommand": "bash -lc '\nset -euo pipefail\n\n# System deps commonly needed for building Python wheels\nsudo apt-get update\nsudo apt-get install -y --no-install-recommends \\\n  build-essential \\\n  curl \\\n  git \\\n  pkg-config \\\n  libffi-dev \\\n  libssl-dev\n\n# Claude Code CLI\nnpm install -g @anthropic-ai/claude-code\n\n# Install Poetry via pipx (isolated, reliable)\npython -m pip install --user --upgrade pip pipx\npython -m pipx ensurepath\nexport PATH=\"$HOME/.local/bin:$PATH\"\n\n# Install/upgrade Poetry (idempotent)\nif command -v poetry >/dev/null 2>&1; then\n  pipx upgrade poetry || true\nelse\n  pipx install poetry\nfi\n\n# Ensure Poetry uses the devcontainer Python\npoetry env use \"$(command -v python)\" || true\n\n# Install project deps (expects pyproject.toml in workspace)\npoetry install\n'",
+
   "postStartCommand": "bash -lc 'if [ -n \"$ANTHROPIC_API_KEY\" ]; then echo \"Claude key present\"; else echo \"⚠ Set ANTHROPIC_API_KEY or run claude login\"; fi'",
+
   "customizations": {
     "vscode": {
       "extensions": [
@@ -29,5 +38,6 @@
       ]
     }
   },
+
   "shutdownAction": "none"
 }
