@@ -390,6 +390,92 @@ def create_mock_role(
     return role
 
 
+def create_mock_reaction(
+    emoji: str = "👍",
+    count: int = 1,
+    me: bool = False
+) -> MagicMock:
+    """Create a mock Discord reaction."""
+    reaction = MagicMock(spec=discord.Reaction)
+    reaction.emoji = emoji
+    reaction.count = count
+    reaction.me = me
+
+    # Mock emoji object for custom emojis
+    if not emoji.isascii() or len(emoji) > 2:
+        emoji_obj = MagicMock()
+        emoji_obj.name = emoji
+        emoji_obj.id = 888888888
+        emoji_obj.animated = False
+        reaction.emoji = emoji_obj
+
+    return reaction
+
+
+def create_mock_webhook(
+    webhook_id: int = 777777777,
+    name: str = "Test Webhook",
+    channel_id: int = 987654321,
+    token: str = "webhook_token_12345"
+) -> MagicMock:
+    """Create a mock Discord webhook."""
+    webhook = MagicMock(spec=discord.Webhook)
+    webhook.id = webhook_id
+    webhook.name = name
+    webhook.channel_id = channel_id
+    webhook.token = token
+    webhook.url = f"https://discord.com/api/webhooks/{webhook_id}/{token}"
+
+    # Mock send method
+    webhook.send = AsyncMock()
+
+    return webhook
+
+
+def create_mock_application_command(
+    command_id: int = 666666666,
+    name: str = "summarize",
+    description: str = "Generate a summary",
+    options: Optional[List[Dict[str, Any]]] = None
+) -> MagicMock:
+    """Create a mock Discord application command."""
+    from discord import app_commands
+
+    command = MagicMock(spec=app_commands.Command)
+    command.id = command_id
+    command.name = name
+    command.description = description
+    command.options = options or []
+
+    return command
+
+
+def create_mock_voice_state(
+    user_id: int = 111111111,
+    channel_id: Optional[int] = None,
+    muted: bool = False,
+    deafened: bool = False
+) -> MagicMock:
+    """Create a mock Discord voice state."""
+    voice_state = MagicMock(spec=discord.VoiceState)
+
+    if channel_id:
+        voice_state.channel = create_mock_channel(channel_id, channel_type=discord.ChannelType.voice)
+    else:
+        voice_state.channel = None
+
+    voice_state.mute = muted
+    voice_state.deaf = deafened
+    voice_state.self_mute = muted
+    voice_state.self_deaf = deafened
+
+    # Mock user
+    user = create_mock_user(user_id)
+    voice_state.user = user
+
+    return voice_state
+
+
 def create_conversation_scenario(
     scenario_type: str = "technical_discussion",
     duration_hours: int = 2,
@@ -402,7 +488,7 @@ def create_conversation_scenario(
             "topics": [
                 "We need to implement the new authentication system",
                 "I think we should use JWT tokens for this",
-                "What about refresh token rotation?", 
+                "What about refresh token rotation?",
                 "Good point, let's also consider rate limiting",
                 "The API endpoints need to be secured properly",
                 "Should we use OAuth2 or custom implementation?",
@@ -436,16 +522,29 @@ def create_conversation_scenario(
                 "Fix deployed, monitoring for any issues"
             ],
             "users": ["devops_engineer", "senior_dev", "qa_lead", "support_manager", "cto"]
+        },
+        "code_review": {
+            "topics": [
+                "Reviewing the pull request for feature X",
+                "The implementation looks solid overall",
+                "I have some concerns about error handling",
+                "Could we add more test coverage?",
+                "The performance seems optimized",
+                "Good use of async/await patterns",
+                "Let's add documentation for this method",
+                "Approved with minor suggestions"
+            ],
+            "users": ["senior_dev", "code_reviewer", "junior_dev", "tech_lead"]
         }
     }
-    
+
     if scenario_type not in scenarios:
         scenario_type = "technical_discussion"
-    
+
     scenario = scenarios[scenario_type]
     topics = scenario["topics"]
     usernames = scenario["users"][:participant_count]
-    
+
     # Create users
     users = []
     for i, username in enumerate(usernames):
@@ -455,21 +554,21 @@ def create_conversation_scenario(
             display_name=username.replace("_", " ").title()
         )
         users.append(user)
-    
+
     # Generate messages
     messages = []
     total_messages = duration_hours * message_density
     start_time = datetime.utcnow() - timedelta(hours=duration_hours)
-    
+
     for i in range(total_messages):
         # Select topic and user
         topic_index = i % len(topics)
         user_index = i % len(users)
-        
+
         # Calculate timestamp
         time_progress = i / total_messages
         timestamp = start_time + timedelta(hours=duration_hours * time_progress)
-        
+
         # Create message with realistic content
         content = topics[topic_index]
         if i > 0:
@@ -482,14 +581,87 @@ def create_conversation_scenario(
                 f"Quick question about {content.lower()}"
             ]
             content = variations[i % len(variations)]
-        
+
         message = create_mock_message(
             message_id=300000000 + i,
             content=content,
             author=users[user_index],
             timestamp=timestamp
         )
-        
+
         messages.append(message)
-    
+
+    return messages
+
+
+# Additional helper functions
+
+def create_message_with_reply(
+    content: str = "This is a reply",
+    replied_to_id: int = 500000000
+) -> MagicMock:
+    """Create a message that replies to another message."""
+    # Create the reference
+    reference = MagicMock(spec=discord.MessageReference)
+    reference.message_id = replied_to_id
+
+    # Create the message
+    message = create_mock_message(content=content, reference=reference)
+
+    return message
+
+
+def create_message_with_code(
+    language: str = "python",
+    code: str = "def example():\n    pass"
+) -> MagicMock:
+    """Create a message containing a code block."""
+    content = f"```{language}\n{code}\n```"
+    return create_mock_message(content=content)
+
+
+def create_bulk_messages_with_variety(
+    count: int = 50,
+    include_bots: bool = True,
+    include_attachments: bool = True,
+    include_embeds: bool = True,
+    include_threads: bool = True
+) -> List[MagicMock]:
+    """Create a diverse set of messages for comprehensive testing."""
+    messages = []
+    base_time = datetime.utcnow() - timedelta(hours=2)
+
+    for i in range(count):
+        # Determine message characteristics
+        is_bot = include_bots and i % 10 == 0
+        has_attachment = include_attachments and i % 8 == 0
+        has_embed = include_embeds and i % 12 == 0
+        in_thread = include_threads and i % 15 == 0
+
+        # Create base message
+        message = create_mock_message(
+            message_id=400000000 + i,
+            content=f"Message content {i+1}",
+            timestamp=base_time + timedelta(minutes=i * 2)
+        )
+
+        # Modify author for bots
+        if is_bot:
+            message.author.bot = True
+            message.author.name = f"BotUser{i}"
+
+        # Add attachments
+        if has_attachment:
+            message.attachments = [create_mock_attachment(f"file_{i}.pdf")]
+
+        # Add embeds
+        if has_embed:
+            message.embeds = [create_mock_embed(f"Embed Title {i}")]
+
+        # Add thread
+        if in_thread:
+            message.thread = create_mock_thread(thread_id=500000000 + i)
+
+        messages.append(message)
+
     return messages

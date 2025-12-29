@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 from typing import List
 
-from src.summarization.engine import SummarizationEngine, SummarizationContext, CostEstimate
+from src.summarization.engine import SummarizationEngine, CostEstimate
 from src.summarization.claude_client import ClaudeClient, ClaudeResponse
-from src.cache.base import SummaryCache
-from src.models.summary import SummaryResult, SummaryOptions
+from src.summarization.cache import SummaryCache
+from src.models.summary import SummaryResult, SummaryOptions, SummarizationContext
 from src.models.message import ProcessedMessage
-from src.exceptions.summarization import SummarizationError, ClaudeAPIError, InsufficientContentError
+from src.exceptions import SummarizationError, ClaudeAPIError, InsufficientContentError
 
 
 @pytest.mark.unit

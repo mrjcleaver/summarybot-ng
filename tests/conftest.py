@@ -43,8 +43,8 @@ def temp_dir():
 @pytest.fixture
 def mock_config():
     """Mock configuration for testing."""
-    from src.config.settings import BotConfig, GuildConfig, SummaryOptions
-    
+    from src.config.settings import BotConfig, GuildConfig, SummaryOptions, WebhookConfig, DatabaseConfig
+
     guild_config = GuildConfig(
         guild_id="123456789",
         enabled_channels=["channel1", "channel2"],
@@ -57,12 +57,27 @@ def mock_config():
         ),
         permission_settings={}
     )
-    
+
+    webhook_config = WebhookConfig(
+        host="127.0.0.1",
+        port=5000,
+        api_keys=["test_api_key"],
+        rate_limit=100,
+        cors_origins=["*"]
+    )
+
+    database_config = DatabaseConfig(
+        url="sqlite+aiosqlite:///:memory:",
+        pool_size=5,
+        max_overflow=10
+    )
+
     return BotConfig(
         discord_token="test_token",
         claude_api_key="test_api_key",
         guild_configs={"123456789": guild_config},
-        webhook_port=5000,
+        webhook_config=webhook_config,
+        database_config=database_config,
         max_message_batch=10000,
         cache_ttl=3600
     )
@@ -75,7 +90,53 @@ def mock_discord_client():
     client.user = MagicMock()
     client.user.id = 987654321
     client.user.name = "TestBot"
+    client.user.discriminator = "0000"
+    client.user.bot = True
+
+    # Mock common async methods
+    client.wait_until_ready = AsyncMock()
+    client.close = AsyncMock()
+    client.start = AsyncMock()
+    client.login = AsyncMock()
+
+    # Mock properties
+    client.guilds = []
+    client.latency = 0.05
+    client.is_closed.return_value = False
+    client.is_ready.return_value = True
+
     return client
+
+
+@pytest.fixture
+def mock_bot():
+    """Mock Discord bot (commands.Bot) for testing."""
+    from discord.ext import commands
+
+    bot = AsyncMock(spec=commands.Bot)
+    bot.user = MagicMock()
+    bot.user.id = 987654321
+    bot.user.name = "TestBot"
+    bot.user.discriminator = "0000"
+    bot.user.bot = True
+
+    # Mock command tree for app commands
+    bot.tree = AsyncMock()
+    bot.tree.sync = AsyncMock()
+
+    # Mock methods
+    bot.wait_until_ready = AsyncMock()
+    bot.close = AsyncMock()
+    bot.add_cog = AsyncMock()
+    bot.remove_cog = AsyncMock()
+
+    # Mock properties
+    bot.guilds = []
+    bot.commands = []
+    bot.cogs = {}
+    bot.extensions = {}
+
+    return bot
 
 
 @pytest.fixture
@@ -149,19 +210,56 @@ def sample_messages(mock_discord_user, mock_discord_channel):
 @pytest.fixture
 def mock_claude_client():
     """Mock Claude API client for testing."""
-    from src.summarization.claude_client import ClaudeClient
-    
+    from src.summarization.claude_client import ClaudeClient, ClaudeResponse
+
     client = AsyncMock(spec=ClaudeClient)
-    client.create_summary.return_value = MagicMock(
+
+    # Default successful response
+    default_response = ClaudeResponse(
         content="This is a test summary of the conversation.",
-        usage=MagicMock(
-            input_tokens=1000,
-            output_tokens=200,
-            total_tokens=1200
-        )
+        model="claude-3-sonnet-20240229",
+        usage={
+            "input_tokens": 1000,
+            "output_tokens": 200
+        },
+        stop_reason="end_turn",
+        response_id="test_response_123",
+        created_at=datetime.utcnow()
     )
+
+    client.create_summary.return_value = default_response
     client.health_check.return_value = True
+    client.get_usage_stats.return_value = MagicMock(
+        total_requests=10,
+        total_input_tokens=10000,
+        total_output_tokens=2000,
+        total_cost_usd=0.156,
+        errors_count=0,
+        rate_limit_hits=0
+    )
+    client.estimate_cost.return_value = 0.0156
+
     return client
+
+
+@pytest.fixture
+def claude_response_factory():
+    """Factory for creating ClaudeResponse test objects."""
+    from src.summarization.claude_client import ClaudeResponse
+
+    def create_response(**kwargs):
+        defaults = {
+            "content": "Test summary content",
+            "model": "claude-3-sonnet-20240229",
+            "usage": {"input_tokens": 1000, "output_tokens": 200},
+            "stop_reason": "end_turn",
+            "response_id": "test_response_123",
+            "created_at": datetime.utcnow()
+        }
+        defaults.update(kwargs)
+        return ClaudeResponse(**defaults)
+
+    return create_response
 
 
 @pytest.fixture
@@ -183,23 +281,60 @@ def mock_cache():
     return cache
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_db_engine():
-    """Create test database engine."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    """Create test database engine with automatic schema setup."""
+    from src.models.base import Base
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        echo=False,
+        future=True
+    )
+
+    # Create all tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     yield engine
+
+    # Cleanup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
     await engine.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_db_session(test_db_engine):
-    """Create test database session."""
+    """Create test database session with automatic rollback."""
     async_session = sessionmaker(
-        test_db_engine, class_=AsyncSession, expire_on_commit=False
+        test_db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False
     )
-    
+
     async with async_session() as session:
-        yield session
+        async with session.begin():
+            yield session
+            await session.rollback()
+
+
+@pytest_asyncio.fixture
+async def test_db_session_factory(test_db_engine):
+    """Factory for creating multiple test database sessions."""
+    async_session = sessionmaker(
+        test_db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+
+    async def create_session():
+        async with async_session() as session:
+            yield session
+
+    return create_session
 
 
 @pytest.fixture
@@ -408,10 +543,112 @@ def pytest_configure(config):
     )
 
 
+@pytest_asyncio.fixture
+async def mock_discord_bot_instance():
+    """Mock fully configured bot instance for integration testing."""
+    from src.discord_bot.bot import SummaryBot
+
+    bot = AsyncMock(spec=SummaryBot)
+    bot.config = MagicMock()
+    bot.summarization_engine = AsyncMock()
+    bot.message_fetcher = AsyncMock()
+    bot.permission_manager = AsyncMock()
+    bot.task_scheduler = AsyncMock()
+
+    # Mock methods
+    bot.setup_hook = AsyncMock()
+    bot.on_ready = AsyncMock()
+    bot.on_message = AsyncMock()
+    bot.on_command_error = AsyncMock()
+
+    return bot
+
+
+@pytest.fixture
+def mock_http_client():
+    """Mock aiohttp client session for testing."""
+    from aiohttp import ClientSession
+
+    session = AsyncMock(spec=ClientSession)
+
+    # Mock response
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"status": "success"})
+    mock_response.text = AsyncMock(return_value="Success")
+    mock_response.read = AsyncMock(return_value=b"Success")
+
+    session.get.return_value.__aenter__.return_value = mock_response
+    session.post.return_value.__aenter__.return_value = mock_response
+    session.close = AsyncMock()
+
+    return session
+
+
+@pytest.fixture
+def mock_redis_client():
+    """Mock Redis client for testing."""
+    redis = AsyncMock()
+
+    # Mock common Redis operations
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock(return_value=True)
+    redis.delete = AsyncMock(return_value=1)
+    redis.exists = AsyncMock(return_value=0)
+    redis.expire = AsyncMock(return_value=True)
+    redis.ttl = AsyncMock(return_value=-1)
+    redis.keys = AsyncMock(return_value=[])
+    redis.flushdb = AsyncMock(return_value=True)
+
+    # Mock pipeline
+    pipeline = AsyncMock()
+    pipeline.execute = AsyncMock(return_value=[])
+    redis.pipeline.return_value = pipeline
+
+    return redis
+
+
 # Cleanup hooks
 @pytest.fixture(autouse=True)
-async def cleanup_after_test():
+def cleanup_after_test():
     """Cleanup resources after each test."""
     yield
-    # Add any cleanup logic here
+    # Synchronous cleanup only
     pass
+
+
+@pytest.fixture
+def freeze_time():
+    """Freeze time for testing time-dependent functionality."""
+    frozen_time = datetime(2024, 1, 15, 12, 0, 0)
+
+    def get_frozen_time():
+        return frozen_time
+
+    return get_frozen_time
+
+
+@pytest.fixture
+def env_vars(monkeypatch):
+    """Fixture for managing environment variables in tests."""
+    def set_env(**kwargs):
+        for key, value in kwargs.items():
+            monkeypatch.setenv(key, str(value))
+
+    return set_env
+
+
+@pytest.fixture
+def mock_file_system(tmp_path):
+    """Create a mock file system structure for testing."""
+    # Create common directories
+    (tmp_path / "data").mkdir()
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "cache").mkdir()
+    (tmp_path / "config").mkdir()
+
+    # Create sample config file
+    config_file = tmp_path / "config" / "bot_config.json"
+    config_file.write_text('{"version": "1.0.0"}')
+
+    return tmp_path

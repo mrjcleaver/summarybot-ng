@@ -277,3 +277,266 @@ def test_task_metadata_to_dict():
     assert meta_dict["task_type"] == TaskType.SUMMARY.value
     assert meta_dict["execution_count"] == 1
     assert "success_rate" in meta_dict
+
+
+def test_summary_task_with_destinations():
+    """Test summary task with multiple destinations."""
+    scheduled_task = ScheduledTask(
+        channel_id="123456789",
+        guild_id="987654321",
+        schedule_type=ScheduleType.DAILY
+    )
+
+    destinations = [
+        Destination(
+            type=DestinationType.DISCORD_CHANNEL,
+            target="channel_1",
+            format="embed",
+            enabled=True
+        ),
+        Destination(
+            type=DestinationType.WEBHOOK,
+            target="https://example.com/webhook",
+            format="json",
+            enabled=True
+        )
+    ]
+
+    task = SummaryTask(
+        scheduled_task=scheduled_task,
+        channel_id="123456789",
+        guild_id="987654321",
+        summary_options=SummaryOptions(),
+        destinations=destinations
+    )
+
+    assert len(task.destinations) == 2
+    task_dict = task.to_dict()
+    assert len(task_dict["destinations"]) == 2
+
+
+def test_summary_task_time_range_custom():
+    """Test summary task with custom time range."""
+    scheduled_task = ScheduledTask(
+        channel_id="123456789",
+        guild_id="987654321",
+        schedule_type=ScheduleType.DAILY
+    )
+
+    task = SummaryTask(
+        scheduled_task=scheduled_task,
+        channel_id="123456789",
+        guild_id="987654321",
+        summary_options=SummaryOptions(),
+        time_range_hours=48  # Custom 48 hour range
+    )
+
+    start_time, end_time = task.get_time_range()
+    time_diff = (end_time - start_time).total_seconds() / 3600
+
+    assert abs(time_diff - 48.0) < 0.1
+
+
+def test_cleanup_task_execution_summary():
+    """Test cleanup task execution summary."""
+    task = CleanupTask(
+        task_id="cleanup_123",
+        retention_days=30
+    )
+
+    # Pending
+    summary = task.get_execution_summary()
+    assert "Pending" in summary
+    assert "30 days" in summary
+
+    # Running
+    task.mark_started()
+    summary = task.get_execution_summary()
+    assert "Running" in summary
+
+    # Completed
+    task.mark_completed(items_deleted=100)
+    summary = task.get_execution_summary()
+    assert "Completed" in summary
+    assert "100 items" in summary
+
+    # Failed
+    task2 = CleanupTask(task_id="cleanup_456")
+    task2.mark_failed("Test error")
+    summary = task2.get_execution_summary()
+    assert "Failed" in summary
+
+
+def test_cleanup_task_guild_specific():
+    """Test cleanup task for specific guild."""
+    task = CleanupTask(
+        task_id="cleanup_123",
+        guild_id="987654321",
+        retention_days=60
+    )
+
+    summary = task.get_execution_summary()
+    assert "guild 987654321" in summary
+
+
+def test_cleanup_task_all_guilds():
+    """Test cleanup task for all guilds."""
+    task = CleanupTask(
+        task_id="cleanup_123",
+        guild_id=None,
+        retention_days=60
+    )
+
+    summary = task.get_execution_summary()
+    assert "all guilds" in summary
+
+
+def test_summary_task_status_transitions():
+    """Test all status transitions for summary task."""
+    scheduled_task = ScheduledTask(
+        channel_id="123456789",
+        guild_id="987654321",
+        schedule_type=ScheduleType.DAILY
+    )
+
+    task = SummaryTask(
+        scheduled_task=scheduled_task,
+        channel_id="123456789",
+        guild_id="987654321",
+        summary_options=SummaryOptions()
+    )
+
+    # Initial state
+    assert task.status == TaskStatus.PENDING
+
+    # Start
+    task.mark_started()
+    assert task.status == TaskStatus.RUNNING
+    assert task.started_at is not None
+
+    # Complete
+    task.mark_completed()
+    assert task.status == TaskStatus.COMPLETED
+    assert task.completed_at is not None
+    assert task.scheduled_task.run_count > 0
+
+    # Test failure path
+    task2 = SummaryTask(
+        scheduled_task=ScheduledTask(
+            channel_id="123456789",
+            guild_id="987654321",
+            schedule_type=ScheduleType.DAILY
+        ),
+        channel_id="123456789",
+        guild_id="987654321",
+        summary_options=SummaryOptions()
+    )
+
+    task2.mark_started()
+    task2.mark_failed("Error message")
+    assert task2.status == TaskStatus.FAILED
+    assert task2.error_message == "Error message"
+
+
+def test_task_metadata_next_execution():
+    """Test task metadata tracks next execution time."""
+    metadata = TaskMetadata(
+        task_id="task_123",
+        task_type=TaskType.SUMMARY,
+        created_at=datetime.utcnow()
+    )
+
+    next_exec = datetime.utcnow() + timedelta(hours=24)
+    metadata.next_execution = next_exec
+
+    meta_dict = metadata.to_dict()
+    assert meta_dict["next_execution"] is not None
+
+
+def test_task_metadata_zero_executions():
+    """Test metadata with zero executions."""
+    metadata = TaskMetadata(
+        task_id="task_123",
+        task_type=TaskType.SUMMARY,
+        created_at=datetime.utcnow()
+    )
+
+    assert metadata.execution_count == 0
+    assert metadata.get_success_rate() == 0.0
+    assert metadata.average_duration_seconds == 0.0
+
+
+def test_summary_task_max_retries_exceeded():
+    """Test behavior when max retries is exceeded."""
+    scheduled_task = ScheduledTask(
+        channel_id="123456789",
+        guild_id="987654321",
+        schedule_type=ScheduleType.DAILY,
+        max_failures=2
+    )
+
+    task = SummaryTask(
+        scheduled_task=scheduled_task,
+        channel_id="123456789",
+        guild_id="987654321",
+        summary_options=SummaryOptions()
+    )
+
+    # First failure
+    task.mark_failed("Error 1")
+    assert task.should_retry() is True
+
+    # Second failure - at max
+    task.mark_failed("Error 2")
+    assert task.should_retry() is False
+    assert task.retry_count == 2
+
+
+def test_cleanup_task_selective_deletion():
+    """Test cleanup task with selective deletion options."""
+    task = CleanupTask(
+        task_id="cleanup_123",
+        retention_days=90,
+        delete_summaries=True,
+        delete_logs=False,
+        delete_cached_data=True
+    )
+
+    task_dict = task.to_dict()
+
+    assert task_dict["delete_summaries"] is True
+    assert task_dict["delete_logs"] is False
+    assert task_dict["delete_cached_data"] is True
+
+
+def test_summary_options_serialization():
+    """Test that summary options are properly serialized."""
+    scheduled_task = ScheduledTask(
+        channel_id="123456789",
+        guild_id="987654321",
+        schedule_type=ScheduleType.DAILY
+    )
+
+    options = SummaryOptions(
+        summary_length=SummaryLength.CONCISE,
+        include_bots=True,
+        min_messages=20,
+        extract_action_items=True,
+        extract_technical_terms=False
+    )
+
+    task = SummaryTask(
+        scheduled_task=scheduled_task,
+        channel_id="123456789",
+        guild_id="987654321",
+        summary_options=options
+    )
+
+    task_dict = task.to_dict()
+    opts = task_dict["summary_options"]
+
+    assert opts["summary_length"] == SummaryLength.CONCISE.value
+    assert opts["include_bots"] is True
+    assert opts["min_messages"] == 20
+    assert opts["extract_action_items"] is True
+    assert opts["extract_technical_terms"] is False

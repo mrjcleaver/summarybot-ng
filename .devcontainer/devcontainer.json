@@ -7,7 +7,7 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
     "ghcr.io/EliiseS/devcontainer-features/bash-profile:1": {
-        "command": "alias cfa='npx claude-flow@alpha'" 
+        "command": "alias cfa='npx claude-flow@alpha' && alias dsp='claude --dangerously-skip-permissions'" 
     },
     "ghcr.io/itsmechlark/features/1password:1.5.0": {},
     "ghcr.io/devcontainers/features/node:1": {},
