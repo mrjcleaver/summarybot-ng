@@ -5,7 +5,7 @@ This module provides structured error handling with context-aware exceptions
 and proper error reporting capabilities.
 """
 
-from .base import SummaryBotException, ErrorContext, create_error_context
+from .base import SummaryBotException, ErrorContext, create_error_context, UserError
 from .summarization import (
     SummarizationError, ClaudeAPIError, InsufficientContentError,
     PromptTooLongError, TokenLimitExceededError
@@ -30,6 +30,7 @@ __all__ = [
     'SummaryBotException',
     'ErrorContext',
     'create_error_context',
+    'UserError',
     
     # Summarization errors
     'SummarizationError',

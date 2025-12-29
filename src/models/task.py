@@ -14,11 +14,19 @@ from .summary import SummaryOptions
 class TaskStatus(Enum):
     """Task execution status."""
     PENDING = "pending"
-    RUNNING = "running" 
+    RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
     SCHEDULED = "scheduled"
+
+
+class TaskType(Enum):
+    """Type of task."""
+    SUMMARY = "summary"
+    CLEANUP = "cleanup"
+    MAINTENANCE = "maintenance"
+    BACKUP = "backup"
 
 
 class ScheduleType(Enum):
@@ -66,6 +74,7 @@ class ScheduledTask(BaseModel):
     name: str = ""
     channel_id: str = ""
     guild_id: str = ""
+    task_type: TaskType = TaskType.SUMMARY
     schedule_type: ScheduleType = ScheduleType.DAILY
     schedule_time: Optional[str] = None  # Time in HH:MM format
     schedule_days: List[int] = field(default_factory=list)  # Days of week (0=Monday)

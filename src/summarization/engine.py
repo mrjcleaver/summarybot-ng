@@ -5,6 +5,7 @@ Main summarization engine coordinating all components.
 import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from dataclasses import dataclass
 
 from .claude_client import ClaudeClient, ClaudeOptions
 from .prompt_builder import PromptBuilder
@@ -16,6 +17,18 @@ from ..exceptions import (
     SummarizationError, InsufficientContentError, PromptTooLongError,
     create_error_context
 )
+
+
+@dataclass
+class CostEstimate:
+    """Cost estimation for summarization."""
+    estimated_cost_usd: float
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    model: str
+    message_count: int
+    error: Optional[str] = None
 
 
 class SummarizationEngine:
@@ -240,13 +253,13 @@ class SummarizationEngine:
     
     def estimate_cost(self,
                      messages: List[ProcessedMessage],
-                     options: SummaryOptions) -> Dict[str, Any]:
+                     options: SummaryOptions) -> CostEstimate:
         """Estimate cost for summarizing messages.
-        
+
         Args:
             messages: Messages to be summarized
             options: Summarization options
-            
+
         Returns:
             Cost estimation with breakdown
         """
@@ -256,31 +269,35 @@ class SummarizationEngine:
                 messages=messages,
                 options=options
             )
-            
+
             input_tokens = prompt_data.estimated_tokens
             output_tokens = options.get_max_tokens_for_length()
-            
+
             cost = self.claude_client.estimate_cost(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 model=options.claude_model
             )
-            
-            return {
-                "estimated_cost_usd": cost,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "total_tokens": input_tokens + output_tokens,
-                "model": options.claude_model,
-                "message_count": len(messages)
-            }
-            
+
+            return CostEstimate(
+                estimated_cost_usd=cost,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=input_tokens + output_tokens,
+                model=options.claude_model,
+                message_count=len(messages)
+            )
+
         except Exception as e:
-            return {
-                "error": str(e),
-                "estimated_cost_usd": 0.0,
-                "message_count": len(messages)
-            }
+            return CostEstimate(
+                estimated_cost_usd=0.0,
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                model=options.claude_model,
+                message_count=len(messages),
+                error=str(e)
+            )
     
     async def health_check(self) -> Dict[str, Any]:
         """Check health of summarization engine.

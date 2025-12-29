@@ -3,9 +3,19 @@ Core configuration data classes for Summary Bot NG.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from datetime import datetime
 from enum import Enum
+
+if TYPE_CHECKING:
+    from .manager import ConfigManager
+
+# Make ConfigManager available for import while avoiding circular dependency
+def __getattr__(name):
+    if name == 'ConfigManager':
+        from .manager import ConfigManager as CM
+        return CM
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 class SummaryLength(Enum):
