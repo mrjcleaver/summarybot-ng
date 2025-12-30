@@ -22,7 +22,19 @@
     "POETRY_VIRTUALENVS_CREATE": "true"
   },
 
-  "postCreateCommand": "bash -lc '\nset -euo pipefail\n\n# System deps commonly needed for building Python wheels\nsudo apt-get update\nsudo apt-get install -y --no-install-recommends \\\n  build-essential \\\n  curl \\\n  git \\\n  pkg-config \\\n  libffi-dev \\\n  libssl-dev\n\n# Claude Code CLI\nnpm install -g @anthropic-ai/claude-code\n\n# Install Poetry via pipx (isolated, reliable)\npython -m pip install --user --upgrade pip pipx\npython -m pipx ensurepath\nexport PATH=\"$HOME/.local/bin:$PATH\"\n\n# Install/upgrade Poetry (idempotent)\nif command -v poetry >/dev/null 2>&1; then\n  pipx upgrade poetry || true\nelse\n  pipx install poetry\nfi\n\n# Ensure Poetry uses the devcontainer Python\npoetry env use \"$(command -v python)\" || true\n\n# Install project deps (expects pyproject.toml in workspace)\npoetry install\n'",
+  "postCreateCommand": [
+  "set -euo pipefail",
+  "sudo apt-get update",
+  "sudo apt-get install -y --no-install-recommends build-essential curl git pkg-config libffi-dev libssl-dev",
+  "npm install -g @anthropic-ai/claude-code",
+  "npm install -g agentic-flow@1.10.2",
+  "python -m pip install --user --upgrade pip pipx",
+  "python -m pipx ensurepath",
+  "export PATH=\"$HOME/.local/bin:$PATH\"",
+  "if command -v poetry >/dev/null 2>&1; then pipx upgrade poetry || true; else pipx install poetry; fi",
+  "poetry env use \"$(command -v python)\" || true",
+  "poetry install"
+],
 
   "postStartCommand": "bash -lc 'if [ -n \"$ANTHROPIC_API_KEY\" ]; then echo \"Claude key present\"; else echo \"⚠ Set ANTHROPIC_API_KEY or run claude login\"; fi'",
 

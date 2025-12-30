@@ -14,6 +14,8 @@ PROXY_PORT="${AGENTIC_FLOW_PROXY_PORT:-3000}"
 PROXY_URL="http://localhost:${PROXY_PORT}"
 DEFAULT_MODEL="${AGENTIC_FLOW_DEFAULT_MODEL:-openai/gpt-4o-mini}"
 LOG_FILE="${AGENTIC_FLOW_PROXY_LOG:-/tmp/agentic-flow-proxy.log}"
+AGENTIC_FLOW_LOG_LEVEL="${AGENTIC_FLOW_LOG_LEVEL:-info}"
+
 
 # Claude Code/claude-flow will talk to this (Anthropic-compatible) endpoint
 export ANTHROPIC_BASE_URL="${PROXY_URL}"
