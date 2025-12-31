@@ -47,6 +47,166 @@ def create_summary_router(
     router = APIRouter()
 
     @router.post(
+        "/summaries",
+        response_model=SummaryResponseModel,
+        responses={
+            201: {"description": "Summary created successfully"},
+            200: {"description": "Summary created successfully"},
+            400: {"model": ErrorResponseModel},
+            401: {"model": ErrorResponseModel},
+            429: {"model": ErrorResponseModel},
+            500: {"model": ErrorResponseModel}
+        },
+        summary="Create a summary from messages",
+        description="Generate a summary from provided Discord messages"
+    )
+    async def create_summary_from_messages(
+        request: Dict[str, Any],
+        auth: APIKeyAuth = Depends(get_api_key_auth),
+        x_request_id: str = Header(None, alias="X-Request-ID")
+    ) -> SummaryResponseModel:
+        """Create a new summary from provided messages.
+
+        Args:
+            request: Summary request with messages array
+            auth: Authentication credentials
+            x_request_id: Optional request ID for tracking
+
+        Returns:
+            Summary response with generated content
+
+        Raises:
+            HTTPException: On validation or processing errors
+        """
+        request_id = x_request_id or f"req-{datetime.utcnow().timestamp()}"
+
+        try:
+            logger.info(f"Processing summary request {request_id}")
+
+            # Extract request parameters
+            messages = request.get("messages", [])
+            channel_id = request.get("channel_id")
+            guild_id = request.get("guild_id")
+            options_dict = request.get("options", {})
+
+            if not messages:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "INVALID_REQUEST",
+                        "message": "No messages provided",
+                        "request_id": request_id
+                    }
+                )
+
+            # Convert to ProcessedMessage objects
+            from ..models.message import ProcessedMessage
+            processed_messages = []
+            for msg in messages:
+                processed_messages.append(ProcessedMessage(
+                    id=msg.get("id", ""),
+                    author_name=msg.get("author_name", "Unknown"),
+                    author_id=msg.get("author_id", ""),
+                    content=msg.get("content", ""),
+                    timestamp=datetime.fromisoformat(msg.get("timestamp", datetime.utcnow().isoformat())),
+                    attachments=msg.get("attachments", []),
+                    references=msg.get("references", []),
+                    mentions=msg.get("mentions", [])
+                ))
+
+            # Build options
+            summary_length = options_dict.get("summary_length", "detailed")
+            options = SummaryOptions(
+                summary_length=SummaryLength(summary_length),
+                include_bots=options_dict.get("include_bots", False),
+                min_messages=options_dict.get("min_messages", 5)
+            )
+
+            # Build context
+            from ..models.summary import SummarizationContext
+
+            # Calculate time span
+            if processed_messages:
+                time_span = (processed_messages[-1].timestamp - processed_messages[0].timestamp).total_seconds() / 3600
+                unique_authors = len(set(msg.author_id for msg in processed_messages))
+            else:
+                time_span = 0.0
+                unique_authors = 0
+
+            context = SummarizationContext(
+                channel_name=f"channel-{channel_id}",
+                guild_name=f"guild-{guild_id}" if guild_id else "unknown",
+                total_participants=unique_authors,
+                time_span_hours=time_span
+            )
+
+            # Generate summary
+            summary_result = await summarization_engine.summarize_messages(
+                messages=processed_messages,
+                options=options,
+                context=context,
+                channel_id=channel_id or "unknown",
+                guild_id=guild_id or "unknown"
+            )
+
+            # Build response
+            response = SummaryResponseModel(
+                id=f"sum_{int(datetime.utcnow().timestamp())}",
+                channel_id=channel_id or "unknown",
+                guild_id=guild_id,
+                summary_text=summary_result.summary_text,
+                key_points=summary_result.key_points,
+                action_items=[],
+                technical_terms=[],
+                participants=[],
+                message_count=len(messages),
+                start_time=processed_messages[0].timestamp if processed_messages else datetime.utcnow(),
+                end_time=processed_messages[-1].timestamp if processed_messages else datetime.utcnow(),
+                created_at=datetime.utcnow(),
+                metadata={
+                    "input_tokens": summary_result.metadata.get("input_tokens", 0),
+                    "output_tokens": summary_result.metadata.get("output_tokens", 0),
+                    "total_tokens": summary_result.metadata.get("total_tokens", 0),
+                    "model": summary_result.metadata.get("model", "unknown")
+                }
+            )
+
+            return response
+
+        except InsufficientContentError as e:
+            logger.warning(f"Insufficient content for summary: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "INSUFFICIENT_CONTENT",
+                    "message": str(e),
+                    "request_id": request_id
+                }
+            )
+
+        except SummarizationError as e:
+            logger.error(f"Summarization failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": e.error_code,
+                    "message": str(e),
+                    "request_id": request_id
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Unexpected error in create_summary: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "INTERNAL_ERROR",
+                    "message": str(e),
+                    "request_id": request_id
+                }
+            )
+
+    @router.post(
         "/summarize",
         response_model=SummaryResponseModel,
         responses={

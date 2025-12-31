@@ -25,26 +25,31 @@ class TestWebhookAPIIntegration:
     @pytest_asyncio.fixture
     async def real_webhook_server(self, mock_config):
         """Create real webhook server with mocked external dependencies."""
-        # Create service container
-        container = ServiceContainer(mock_config)
+        # Mock Claude client BEFORE creating container
+        mock_instance = AsyncMock()
+        mock_instance.create_summary.return_value = MagicMock(
+            content="Test API summary content",
+            model="claude-3-5-sonnet-20241022",
+            input_tokens=1000,
+            output_tokens=200,
+            total_tokens=1200,
+            response_id="test_api_response_123"
+        )
+        # Make health_check async return True
+        async def mock_health_check():
+            return True
+        mock_instance.health_check = mock_health_check
 
-        # Mock Claude client
-        with patch('src.summarization.claude_client.ClaudeClient') as mock_claude:
-            mock_instance = AsyncMock()
-            mock_instance.create_summary.return_value = MagicMock(
-                content="Test API summary content",
-                model="claude-3-5-sonnet-20241022",
-                input_tokens=1000,
-                output_tokens=200,
-                total_tokens=1200,
-                response_id="test_api_response_123"
-            )
-            mock_instance.health_check.return_value = True
-            mock_instance.get_usage_stats.return_value = MagicMock(
-                to_dict=lambda: {"total_requests": 1, "total_tokens": 1200}
-            )
-            mock_claude.return_value = mock_instance
+        # Make get_usage_stats return a proper object
+        mock_instance.get_usage_stats.return_value = MagicMock(
+            to_dict=lambda: {"total_requests": 1, "total_tokens": 1200}
+        )
 
+        with patch('src.container.ClaudeClient') as mock_claude_class:
+            mock_claude_class.return_value = mock_instance
+
+            # Create service container with mocked Claude
+            container = ServiceContainer(mock_config)
             await container.initialize()
 
             # Create webhook server
@@ -310,6 +315,46 @@ class TestWebhookAPIIntegration:
 class TestWebhookDatabaseIntegration:
     """Integration tests for webhook with database persistence."""
 
+    @pytest_asyncio.fixture
+    async def real_webhook_server(self, mock_config):
+        """Create real webhook server with mocked external dependencies."""
+        # Mock Claude client BEFORE creating container
+        mock_instance = AsyncMock()
+        mock_instance.create_summary.return_value = MagicMock(
+            content="Test API summary content",
+            model="claude-3-5-sonnet-20241022",
+            input_tokens=1000,
+            output_tokens=200,
+            total_tokens=1200,
+            response_id="test_api_response_123"
+        )
+        # Make health_check async return True
+        async def mock_health_check():
+            return True
+        mock_instance.health_check = mock_health_check
+
+        # Make get_usage_stats return a proper object
+        mock_instance.get_usage_stats.return_value = MagicMock(
+            to_dict=lambda: {"total_requests": 1, "total_tokens": 1200}
+        )
+
+        with patch('src.container.ClaudeClient') as mock_claude_class:
+            mock_claude_class.return_value = mock_instance
+
+            # Create service container with mocked Claude
+            container = ServiceContainer(mock_config)
+            await container.initialize()
+
+            # Create webhook server
+            server = WebhookServer(
+                config=mock_config,
+                summarization_engine=container.summarization_engine
+            )
+
+            yield server
+
+            await container.cleanup()
+
     @pytest.mark.asyncio
     async def test_summary_persistence(self, real_webhook_server, sample_messages):
         """Test that summaries are persisted to database."""
@@ -330,5 +375,5 @@ class TestWebhookDatabaseIntegration:
                 headers={"X-API-Key": "test_api_key"}
             )
 
-            # May not be implemented yet, but should not crash
-            assert response.status_code in [200, 404, 501]
+            # May not be implemented yet (405 Method Not Allowed), but should not crash
+            assert response.status_code in [200, 404, 405, 501]

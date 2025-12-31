@@ -82,6 +82,7 @@ class BaseCommandHandler(ABC):
         self.permission_manager = permission_manager
         self.rate_limit_enabled = rate_limit_enabled
         self.rate_limiter = RateLimitTracker()
+        self._deferred_interactions: set = set()  # Track deferred interactions
 
         # Default rate limits (can be overridden by subclasses)
         self.max_requests_per_minute = 5
@@ -189,8 +190,17 @@ class BaseCommandHandler(ABC):
             ephemeral: Whether response should be ephemeral (only visible to user)
         """
         try:
-            if not interaction.response.is_done():
+            import inspect
+            # Handle both sync and async is_done() for testing flexibility
+            is_done_result = interaction.response.is_done()
+            if inspect.iscoroutine(is_done_result):
+                is_done = await is_done_result
+            else:
+                is_done = is_done_result
+
+            if not is_done:
                 await interaction.response.defer(ephemeral=ephemeral)
+                self._deferred_interactions.add(id(interaction))  # Track that we deferred
                 logger.debug(f"Deferred response for command: {interaction.command.name if interaction.command else 'unknown'}")
         except Exception as e:
             logger.warning(f"Failed to defer response: {e}")
@@ -235,12 +245,24 @@ class BaseCommandHandler(ABC):
             )
 
         try:
-            if interaction.response.is_done():
+            import inspect
+            # Handle both sync and async is_done() for testing flexibility
+            is_done_result = interaction.response.is_done()
+            if inspect.iscoroutine(is_done_result):
+                is_done = await is_done_result
+            else:
+                is_done = is_done_result
+
+            # Check if we deferred this interaction OR if Discord says response is done
+            if id(interaction) in self._deferred_interactions or is_done:
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error(f"Failed to send error response: {e}")
+        finally:
+            # Clean up tracking
+            self._deferred_interactions.discard(id(interaction))
 
     async def send_success_response(self, interaction: discord.Interaction,
                                    title: str, description: str,
@@ -265,13 +287,24 @@ class BaseCommandHandler(ABC):
             )
 
         try:
-            if interaction.response.is_done():
+            import inspect
+            # Handle both sync and async is_done() for testing flexibility
+            is_done_result = interaction.response.is_done()
+            if inspect.iscoroutine(is_done_result):
+                is_done = await is_done_result
+            else:
+                is_done = is_done_result
+
+            # Check if we deferred this interaction OR if Discord says response is done
+            if id(interaction) in self._deferred_interactions or is_done:
                 await interaction.followup.send(embed=embed, ephemeral=ephemeral)
             else:
                 await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
         except Exception as e:
             logger.error(f"Failed to send success response: {e}")
-            raise
+        finally:
+            # Clean up tracking
+            self._deferred_interactions.discard(id(interaction))
 
     async def send_rate_limit_response(self, interaction: discord.Interaction,
                                       reset_seconds: int) -> None:

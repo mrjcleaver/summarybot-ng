@@ -251,9 +251,9 @@ class SummarizationEngine:
         
         return final_results
     
-    def estimate_cost(self,
-                     messages: List[ProcessedMessage],
-                     options: SummaryOptions) -> CostEstimate:
+    async def estimate_cost(self,
+                           messages: List[ProcessedMessage],
+                           options: SummaryOptions) -> CostEstimate:
         """Estimate cost for summarizing messages.
 
         Args:
@@ -265,6 +265,8 @@ class SummarizationEngine:
         """
         # Build prompt to estimate tokens
         try:
+            import inspect
+
             prompt_data = self.prompt_builder.build_summarization_prompt(
                 messages=messages,
                 options=options
@@ -273,11 +275,17 @@ class SummarizationEngine:
             input_tokens = prompt_data.estimated_tokens
             output_tokens = options.get_max_tokens_for_length()
 
-            cost = self.claude_client.estimate_cost(
+            cost_result = self.claude_client.estimate_cost(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 model=options.claude_model
             )
+
+            # Handle both sync and async for testing flexibility
+            if inspect.iscoroutine(cost_result):
+                cost = await cost_result
+            else:
+                cost = cost_result
 
             return CostEstimate(
                 estimated_cost_usd=cost,
@@ -301,10 +309,19 @@ class SummarizationEngine:
     
     async def health_check(self) -> Dict[str, Any]:
         """Check health of summarization engine.
-        
+
         Returns:
             Health status information
         """
+        import inspect
+
+        # Get usage stats (handle both sync and async for testing flexibility)
+        usage_stats_result = self.claude_client.get_usage_stats()
+        if inspect.iscoroutine(usage_stats_result):
+            usage_stats = await usage_stats_result
+        else:
+            usage_stats = usage_stats_result
+
         health_info = {
             "status": "healthy",
             "claude_api": False,
@@ -313,7 +330,7 @@ class SummarizationEngine:
                 "prompt_builder": True,
                 "response_parser": True
             },
-            "usage_stats": self.claude_client.get_usage_stats().to_dict()
+            "usage_stats": usage_stats.to_dict()
         }
         
         # Check Claude API

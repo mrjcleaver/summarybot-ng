@@ -61,7 +61,7 @@ def mock_config():
     webhook_config = WebhookConfig(
         host="127.0.0.1",
         port=5000,
-        api_keys=["test_api_key"],
+        api_keys={"test_api_key": "test_user"},
         rate_limit=100,
         cors_origins=["*"]
     )

@@ -165,8 +165,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
             if not target_channel.permissions_for(interaction.guild.me).read_message_history:
                 raise ChannelAccessError(
                     channel_id=str(target_channel.id),
-                    error_code="NO_READ_PERMISSION",
-                    user_message=f"I don't have permission to read messages in {target_channel.mention}."
+                    reason=f"I don't have permission to read messages in {target_channel.mention}."
                 )
 
             # Parse time range
@@ -495,7 +494,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
             )
 
             # Get cost estimate
-            cost_estimate = self.summarization_engine.estimate_cost(
+            cost_estimate = await self.summarization_engine.estimate_cost(
                 messages=processed_messages,
                 options=options
             )
@@ -510,31 +509,31 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
             embed.add_field(
                 name="Messages",
-                value=str(cost_estimate.get("message_count", 0)),
+                value=str(cost_estimate.message_count),
                 inline=True
             )
 
             embed.add_field(
                 name="Estimated Cost",
-                value=f"${cost_estimate.get('estimated_cost_usd', 0.0):.4f} USD",
+                value=f"${cost_estimate.estimated_cost_usd:.4f} USD",
                 inline=True
             )
 
             embed.add_field(
                 name="Input Tokens",
-                value=f"{cost_estimate.get('input_tokens', 0):,}",
+                value=f"{cost_estimate.input_tokens:,}",
                 inline=True
             )
 
             embed.add_field(
                 name="Output Tokens",
-                value=f"{cost_estimate.get('output_tokens', 0):,}",
+                value=f"{cost_estimate.output_tokens:,}",
                 inline=True
             )
 
             embed.add_field(
                 name="Model",
-                value=cost_estimate.get("model", "unknown"),
+                value=cost_estimate.model,
                 inline=True
             )
 
