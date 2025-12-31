@@ -10,11 +10,7 @@
     "ghcr.io/EliiseS/devcontainer-features/bash-profile:1": {
       "command": "alias cfa='npx claude-flow@alpha' && alias dsp='claude --dangerously-skip-permissions'"
     },
-    "ghcr.io/itsmechlark/features/1password:1.5.0": {},
-    "ghcr.io/devcontainers/features/node:1": {},
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.11"
-    }
+    "ghcr.io/itsmechlark/features/1password:1.5.0": {}
   },
 
   "containerEnv": {
@@ -22,8 +18,7 @@
   },
 
   "postCreateCommand": [
-    "export PATH=\"$HOME/.local/bin:$PATH\"",
-    "if command -v poetry >/dev/null 2>&1; then pipx upgrade poetry || true; else pipx install poetry; fi",
+    "poetry --version",
     "poetry config virtualenvs.in-project true --local",
     "poetry env use \"$(command -v python)\" || true",
     "./scripts/poetry-install-if-needed.sh"
