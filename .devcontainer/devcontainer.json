@@ -22,11 +22,14 @@
   },
 
   "postCreateCommand": [
+    "npm install -g @anthropic-ai/claude-code",
+    "npm install -g agentic-flow@1.10.2",
     "export PATH=\"$HOME/.local/bin:$PATH\"",
     "if command -v poetry >/dev/null 2>&1; then pipx upgrade poetry || true; else pipx install poetry; fi",
+    "poetry config virtualenvs.in-project true --local",
     "poetry env use \"$(command -v python)\" || true",
-    "poetry install"
-],
+    "./scripts/poetry-install-if-needed.sh"
+  ],
   "postStartCommand": "bash -lc 'if [ -n \"$ANTHROPIC_API_KEY\" ]; then echo \"Claude key present\"; else echo \"⚠ Set ANTHROPIC_API_KEY or run claude login\"; fi'",
 
   "customizations": {
