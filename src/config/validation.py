@@ -167,11 +167,17 @@ class ConfigValidator:
         for user_id in guild_config.default_summary_options.excluded_users:
             if not user_id.isdigit():
                 errors.append(f"Invalid excluded user ID: {user_id}")
-        
-        for user_id in guild_config.permission_settings.allowed_users:
-            if not user_id.isdigit():
-                errors.append(f"Invalid allowed user ID: {user_id}")
-        
+
+        # Handle permission_settings as either dict or PermissionSettings object
+        if hasattr(guild_config.permission_settings, 'allowed_users'):
+            for user_id in guild_config.permission_settings.allowed_users:
+                if not user_id.isdigit():
+                    errors.append(f"Invalid allowed user ID: {user_id}")
+        elif isinstance(guild_config.permission_settings, dict):
+            for user_id in guild_config.permission_settings.get('allowed_users', []):
+                if not user_id.isdigit():
+                    errors.append(f"Invalid allowed user ID: {user_id}")
+
         return errors
     
     @staticmethod

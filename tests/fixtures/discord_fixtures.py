@@ -7,7 +7,7 @@ for consistent testing across all test modules.
 
 from unittest.mock import MagicMock, AsyncMock
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import discord
 
 from src.models.message import ProcessedMessage

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
-from pydantic import BaseModel, Field, validator, HttpUrl
+from pydantic import BaseModel, Field, field_validator, model_validator, validator, HttpUrl
 
 
 class SummaryType(str, Enum):
@@ -39,14 +39,15 @@ class TimeRangeModel(BaseModel):
     start: datetime = Field(..., description="Start time for message retrieval")
     end: datetime = Field(..., description="End time for message retrieval")
 
-    @validator("end")
-    def end_after_start(cls, v, values):
+    @model_validator(mode='after')
+    def validate_time_range(self):
         """Validate end time is after start time."""
-        if "start" in values and v <= values["start"]:
+        if self.end <= self.start:
             raise ValueError("end time must be after start time")
-        return v
+        return self
 
-    @validator("start", "end")
+    @field_validator("start", "end")
+    @classmethod
     def not_future(cls, v):
         """Validate time is not in the future."""
         if v > datetime.utcnow():

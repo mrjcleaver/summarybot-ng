@@ -12,6 +12,7 @@ Tests cover:
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta
@@ -55,7 +56,7 @@ def mock_anthropic_response():
     return response
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def claude_client(api_key):
     """Create ClaudeClient instance."""
     client = ClaudeClient(

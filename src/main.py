@@ -17,25 +17,26 @@ import sys
 from typing import Optional
 from pathlib import Path
 
-from config import ConfigManager, BotConfig
-from exceptions import handle_unexpected_error
+from .config import ConfigManager, BotConfig
+from .exceptions import handle_unexpected_error
 
 # Core components
-from summarization import SummarizationEngine, ClaudeClient
-from summarization.cache import SummaryCache, MemoryCache
-from message_processing import MessageProcessor
+from .summarization import SummarizationEngine, ClaudeClient
+from .summarization.cache import SummaryCache, MemoryCache
+from .message_processing import MessageProcessor
 
 # New modules
-from discord_bot import SummaryBot, EventHandler
-from permissions import PermissionManager
-from command_handlers import (
+from .discord_bot import SummaryBot, EventHandler
+from .permissions import PermissionManager
+from .command_handlers import (
     SummarizeCommandHandler,
     ConfigCommandHandler,
     ScheduleCommandHandler
 )
-from scheduling import TaskScheduler
-from webhook_service import WebhookServer
-from data import initialize_repositories, run_migrations
+from .scheduling import TaskScheduler
+from .scheduling.executor import TaskExecutor
+from .webhook_service import WebhookServer
+from .data import initialize_repositories, run_migrations
 
 
 class SummaryBotApp:
@@ -160,28 +161,13 @@ class SummaryBotApp:
         # Initialize message processor
         self.message_processor = MessageProcessor(self.discord_bot.client)
 
-        # Create command handlers
-        summarize_handler = SummarizeCommandHandler(
-            summarization_engine=self.summarization_engine,
-            permission_manager=self.permission_manager,
-            message_processor=self.message_processor
-        )
+        # TODO: Integrate command handlers with bot's CommandRegistry
+        # For now, the bot uses basic commands defined in CommandRegistry
+        # Command handlers (SummarizeCommandHandler, ConfigCommandHandler) are available
+        # but need to be integrated into the command tree
 
-        config_handler = ConfigCommandHandler(
-            permission_manager=self.permission_manager,
-            config_manager=ConfigManager()
-        )
-
-        # Register command handlers with bot
-        self.discord_bot.register_command_handler("summarize", summarize_handler)
-        self.discord_bot.register_command_handler("config", config_handler)
-
-        # Setup event handlers
-        event_handler = EventHandler(self.discord_bot)
-        await self.discord_bot.setup_event_handlers(event_handler)
-
-        # Setup slash commands
-        await self.discord_bot.setup_commands()
+        # Event handlers are already registered in SummaryBot.__init__
+        # Slash commands will be set up when bot starts
 
         self.logger.info("Discord bot initialized with command handlers")
 
@@ -189,20 +175,19 @@ class SummaryBotApp:
         """Initialize task scheduler for automated summaries."""
         self.logger.info("Initializing task scheduler...")
 
-        self.task_scheduler = TaskScheduler(
+        # Create task executor
+        task_executor = TaskExecutor(
             summarization_engine=self.summarization_engine,
             message_processor=self.message_processor,
             discord_client=self.discord_bot.client
         )
 
-        # Create schedule command handler
-        schedule_handler = ScheduleCommandHandler(
-            permission_manager=self.permission_manager,
-            task_scheduler=self.task_scheduler
+        # Create task scheduler
+        self.task_scheduler = TaskScheduler(
+            task_executor=task_executor
         )
 
-        # Register schedule handler
-        self.discord_bot.register_command_handler("schedule", schedule_handler)
+        # TODO: ScheduleCommandHandler needs to be integrated into CommandRegistry
 
         # Start scheduler
         await self.task_scheduler.start()
@@ -257,7 +242,7 @@ class SummaryBotApp:
             self.logger.info("=" * 60)
 
             # Start Discord client (this blocks until shutdown)
-            await self.discord_bot.start(self.config.discord_token)
+            await self.discord_bot.start()
 
         except Exception as e:
             error = handle_unexpected_error(e)
