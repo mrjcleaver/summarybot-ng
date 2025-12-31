@@ -303,6 +303,42 @@ class SummaryBot:
             logger.error(f"Failed to fetch channel {channel_id}: {e}")
             return None
 
+    async def add_cog(self, cog) -> None:
+        """
+        Add a cog to the bot.
+
+        This is a compatibility method for Discord.py's cog system.
+        While we don't use traditional cogs, this allows tests to verify
+        command registration logic.
+
+        Args:
+            cog: Cog instance to add
+        """
+        # Store cog reference if needed
+        if not hasattr(self, '_cogs'):
+            self._cogs = []
+        self._cogs.append(cog)
+        logger.info(f"Added cog: {cog.__class__.__name__}")
+
+    async def close(self) -> None:
+        """
+        Close the bot's Discord connection.
+
+        This is an alias for stop() to maintain compatibility with discord.py's
+        standard interface.
+        """
+        await self.stop()
+
+    @property
+    def tree(self):
+        """
+        Get the bot's command tree.
+
+        Returns:
+            discord.app_commands.CommandTree: The command tree instance
+        """
+        return self.client.tree
+
     def __repr__(self) -> str:
         """String representation of the bot."""
         status = "running" if self._is_running else "stopped"

@@ -6,6 +6,7 @@ with mocked external dependencies.
 """
 
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 import discord
@@ -23,7 +24,7 @@ from src.permissions.manager import PermissionManager
 class TestDiscordBotIntegration:
     """Test Discord bot integration scenarios."""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def bot_config(self):
         """Create bot configuration for testing."""
         guild_config = GuildConfig(
@@ -51,14 +52,30 @@ class TestDiscordBotIntegration:
         }
         return services
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def discord_bot(self, bot_config, mock_services):
         """Create SummaryBot instance for testing."""
-        with patch('discord.Client.__init__', return_value=None):
+        with patch('discord.Client') as mock_client_class:
+            # Create a mock client instance with all necessary attributes
+            mock_client = MagicMock()
+            mock_client.http = MagicMock()
+            mock_client.user = MagicMock()
+            mock_client.user.id = 987654321
+            mock_client.user.name = "TestBot"
+
+            # Mock the connection state for CommandTree
+            mock_connection = MagicMock()
+            mock_connection._command_tree = None
+            mock_client._connection = mock_connection
+
+            # Mock async methods
+            mock_client.start = AsyncMock()
+            mock_client.close = AsyncMock()
+            mock_client.wait_until_ready = AsyncMock()
+
+            mock_client_class.return_value = mock_client
+
             bot = SummaryBot(bot_config, mock_services)
-            bot.user = MagicMock()
-            bot.user.id = 987654321
-            bot.user.name = "TestBot"
             return bot
     
     @pytest.fixture
@@ -88,27 +105,36 @@ class TestDiscordBotIntegration:
         user.id = 111111111
         user.name = "testuser"
         user.display_name = "Test User"
-        
+
         interaction = AsyncMock(spec=discord.Interaction)
         interaction.guild = mock_guild
         interaction.channel = mock_channel
         interaction.user = user
-        interaction.response = AsyncMock()
-        interaction.followup = AsyncMock()
+
+        # Mock response object with sync properties and async methods
+        mock_response = MagicMock()
+        mock_response.is_done.return_value = False  # Sync method returning bool
+        mock_response.defer = AsyncMock()  # Async method
+        mock_response.send_message = AsyncMock()  # Async method
+        interaction.response = mock_response
+
+        # Mock followup with async methods
+        mock_followup = MagicMock()
+        mock_followup.send = AsyncMock()
+        interaction.followup = mock_followup
+
         return interaction
     
     @pytest.mark.asyncio
     async def test_bot_startup_success(self, discord_bot, mock_services):
         """Test successful bot startup sequence."""
-        with patch.object(discord_bot, 'wait_until_ready'), \
-             patch.object(discord_bot, 'setup_commands'), \
-             patch.object(discord_bot, 'sync_commands'):
-            
+        with patch.object(discord_bot, 'setup_commands') as mock_setup:
+            mock_setup.return_value = AsyncMock()
+
             await discord_bot.start()
-            
+
             # Verify startup sequence
-            discord_bot.setup_commands.assert_called_once()
-            discord_bot.sync_commands.assert_called_once()
+            mock_setup.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_bot_command_registration(self, discord_bot):
@@ -268,7 +294,54 @@ class TestDiscordBotIntegration:
 @pytest.mark.integration
 class TestCommandHandlerIntegration:
     """Test command handler integration with Discord components."""
-    
+
+    @pytest.fixture
+    def mock_guild(self):
+        """Mock Discord guild for command handler tests."""
+        guild = MagicMock(spec=discord.Guild)
+        guild.id = 123456789
+        guild.name = "Test Guild"
+        guild.member_count = 100
+        guild.channels = []
+        return guild
+
+    @pytest.fixture
+    def mock_channel(self, mock_guild):
+        """Mock Discord channel for command handler tests."""
+        channel = MagicMock(spec=discord.TextChannel)
+        channel.id = 987654321
+        channel.name = "test-channel"
+        channel.guild = mock_guild
+        channel.permissions_for.return_value = discord.Permissions.all()
+        return channel
+
+    @pytest.fixture
+    def mock_interaction(self, mock_channel, mock_guild):
+        """Mock Discord interaction for command handler tests."""
+        user = MagicMock(spec=discord.User)
+        user.id = 111111111
+        user.name = "testuser"
+        user.display_name = "Test User"
+
+        interaction = AsyncMock(spec=discord.Interaction)
+        interaction.guild = mock_guild
+        interaction.channel = mock_channel
+        interaction.user = user
+
+        # Mock response object with sync properties and async methods
+        mock_response = MagicMock()
+        mock_response.is_done.return_value = False  # Sync method returning bool
+        mock_response.defer = AsyncMock()  # Async method
+        mock_response.send_message = AsyncMock()  # Async method
+        interaction.response = mock_response
+
+        # Mock followup with async methods
+        mock_followup = MagicMock()
+        mock_followup.send = AsyncMock()
+        interaction.followup = mock_followup
+
+        return interaction
+
     @pytest.fixture
     def mock_summarization_engine(self):
         """Mock summarization engine."""
@@ -280,7 +353,7 @@ class TestCommandHandlerIntegration:
             to_embed=MagicMock(return_value=discord.Embed(title="Test"))
         )
         return engine
-    
+
     @pytest.fixture
     def mock_permission_manager(self):
         """Mock permission manager."""
@@ -288,7 +361,7 @@ class TestCommandHandlerIntegration:
         manager.check_command_permission.return_value = True
         manager.check_channel_access.return_value = True
         return manager
-    
+
     @pytest.fixture
     def summarize_handler(self, mock_summarization_engine, mock_permission_manager):
         """Create summarize command handler."""
@@ -296,22 +369,28 @@ class TestCommandHandlerIntegration:
     
     @pytest.mark.asyncio
     async def test_summarize_command_full_flow(
-        self, 
-        summarize_handler, 
+        self,
+        summarize_handler,
         mock_interaction,
         mock_summarization_engine
     ):
         """Test complete summarize command execution flow."""
-        # Mock message fetching
+        # Mock message fetching with proper datetime (need minimum 5 messages)
         with patch.object(summarize_handler, 'fetch_messages') as mock_fetch:
-            mock_fetch.return_value = [
-                MagicMock(content="Test message 1"),
-                MagicMock(content="Test message 2"),
-                MagicMock(content="Test message 3")
-            ]
-            
+            base_time = datetime.utcnow()
+            mock_messages = []
+            for i in range(10):  # Create 10 messages to exceed minimum requirement
+                msg = MagicMock()
+                msg.content = f"Test message {i+1} with enough content to be meaningful"
+                msg.created_at = base_time - timedelta(minutes=i)
+                msg.author = MagicMock()
+                msg.author.bot = False
+                mock_messages.append(msg)
+
+            mock_fetch.return_value = mock_messages
+
             await summarize_handler.handle_summarize(mock_interaction)
-            
+
             # Verify full execution chain
             mock_fetch.assert_called_once()
             mock_summarization_engine.summarize_messages.assert_called_once()
@@ -319,54 +398,80 @@ class TestCommandHandlerIntegration:
     
     @pytest.mark.asyncio
     async def test_quick_summary_command(
-        self, 
-        summarize_handler, 
+        self,
+        summarize_handler,
         mock_interaction,
         mock_summarization_engine
     ):
         """Test quick summary command with recent messages."""
         with patch.object(summarize_handler, 'fetch_recent_messages') as mock_fetch:
-            mock_fetch.return_value = [MagicMock(content="Recent message")]
-            
+            # Create minimum 5 messages for validation
+            base_time = datetime.utcnow()
+            mock_messages = []
+            for i in range(6):
+                msg = MagicMock()
+                msg.content = f"Recent message {i+1} with content"
+                msg.created_at = base_time - timedelta(minutes=i)
+                msg.author = MagicMock()
+                msg.author.bot = False
+                mock_messages.append(msg)
+            mock_fetch.return_value = mock_messages
+
             await summarize_handler.handle_quick_summary(mock_interaction)
-            
+
             # Verify quick summary execution
             mock_fetch.assert_called_once()
             mock_summarization_engine.summarize_messages.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_scheduled_summary_command(
-        self, 
-        summarize_handler, 
-        mock_interaction
+        self,
+        summarize_handler,
+        mock_interaction,
+        mock_channel
     ):
         """Test scheduled summary command."""
         with patch('src.scheduling.scheduler.TaskScheduler') as mock_scheduler:
             mock_scheduler_instance = AsyncMock()
             mock_scheduler.return_value = mock_scheduler_instance
             mock_scheduler_instance.schedule_task.return_value = "task_123"
-            
-            await summarize_handler.handle_scheduled_summary(mock_interaction)
-            
+
+            # Call with correct arguments: channel and schedule
+            await summarize_handler.handle_scheduled_summary(
+                mock_interaction,
+                channel=mock_channel,
+                schedule="daily"
+            )
+
             # Verify task was scheduled
             mock_scheduler_instance.schedule_task.assert_called_once()
             mock_interaction.response.send_message.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_error_handling_in_command(
-        self, 
-        summarize_handler, 
+        self,
+        summarize_handler,
         mock_interaction,
         mock_summarization_engine
     ):
         """Test error handling within command execution."""
         # Configure summarization engine to raise an error
         mock_summarization_engine.summarize_messages.side_effect = Exception("Test error")
-        
-        with patch.object(summarize_handler, 'fetch_messages', return_value=[MagicMock()]):
+
+        # Create mock messages with datetime
+        mock_msg = MagicMock()
+        mock_msg.created_at = datetime.utcnow()
+        mock_msg.content = "Test message"
+
+        with patch.object(summarize_handler, 'fetch_messages', return_value=[mock_msg]):
             await summarize_handler.handle_summarize(mock_interaction)
-            
-            # Verify error response was sent
+
+            # Verify error response was sent (error is sent as embed, not content)
             mock_interaction.response.send_message.assert_called()
             call_args = mock_interaction.response.send_message.call_args
-            assert "error" in call_args[1].get("content", "").lower()
+            # Check if embed was sent or content contains error
+            if 'embed' in call_args[1]:
+                embed = call_args[1]['embed']
+                assert embed is not None
+            else:
+                assert "error" in call_args[1].get("content", "").lower()

@@ -266,6 +266,66 @@ class SummaryCache:
             "max_tokens": summary.metadata.get("max_tokens", ""),
             # Could add more options here
         }
-        
+
         options_str = json.dumps(options_data, sort_keys=True)
         return hashlib.md5(options_str.encode()).hexdigest()[:8]
+
+    async def initialize(self) -> None:
+        """Initialize the cache backend.
+
+        This method is called during service container initialization.
+        Can be used for connection setup, warming, etc.
+        """
+        # Perform health check to ensure backend is ready
+        await self.backend.health_check()
+
+    async def close(self) -> None:
+        """Close the cache backend and cleanup resources.
+
+        This method is called during service container cleanup.
+        Can be used for connection teardown, final flushes, etc.
+        """
+        # Most backends don't need explicit cleanup, but provide hook for future use
+        pass
+
+
+def create_cache(cache_config) -> SummaryCache:
+    """Factory function to create a SummaryCache instance from configuration.
+
+    Args:
+        cache_config: Cache configuration object containing backend settings
+
+    Returns:
+        Configured SummaryCache instance
+
+    Raises:
+        ValueError: If cache backend is not supported
+
+    Example:
+        >>> from src.config.settings import CacheConfig
+        >>> config = CacheConfig(backend="memory", max_size=1000, default_ttl=3600)
+        >>> cache = create_cache(config)
+    """
+    backend_type = cache_config.backend.lower()
+
+    if backend_type == "memory":
+        # Create in-memory cache backend
+        backend = MemoryCache(
+            max_size=cache_config.max_size,
+            default_ttl=cache_config.default_ttl
+        )
+        return SummaryCache(backend=backend)
+
+    elif backend_type == "redis":
+        # Redis backend would be implemented here
+        # For now, raise an error since Redis isn't implemented yet
+        raise ValueError(
+            f"Redis cache backend is not yet implemented. "
+            f"Please use 'memory' backend instead."
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported cache backend: {backend_type}. "
+            f"Supported backends: 'memory', 'redis'"
+        )

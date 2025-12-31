@@ -122,7 +122,17 @@ class ClaudeClient:
         # Rate limiting
         self._last_request_time = 0
         self._min_request_interval = 0.1  # Minimum seconds between requests
-        
+
+    async def close(self):
+        """Close the Claude client and cleanup resources.
+
+        This is a cleanup method for lifecycle management.
+        The AsyncAnthropic client handles its own cleanup internally.
+        """
+        # The AsyncAnthropic client doesn't require explicit cleanup
+        # This method exists for compatibility with container lifecycle
+        pass
+
     async def create_summary(self, 
                             prompt: str,
                             system_prompt: str,

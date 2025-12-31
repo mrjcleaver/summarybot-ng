@@ -10,8 +10,7 @@ import pytest_asyncio
 import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from src.webhook_service.server import WebhookServer
 from src.container import ServiceContainer
@@ -58,42 +57,48 @@ class TestWebhookAPIIntegration:
 
             await container.cleanup()
 
-    @pytest.fixture
-    def test_client(self, real_webhook_server):
-        """Create TestClient for synchronous testing."""
-        return TestClient(real_webhook_server.app)
-
     @pytest.mark.asyncio
-    async def test_health_check_endpoint(self, test_client):
+    async def test_health_check_endpoint(self, real_webhook_server):
         """Test health check endpoint returns correct status."""
-        response = test_client.get("/health")
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
+            response = await client.get("/health")
 
-        assert response.status_code == 200
-        data = response.json()
+            assert response.status_code == 200
+            data = response.json()
 
-        assert "status" in data
-        assert data["status"] in ["healthy", "degraded", "unhealthy"]
-        assert "version" in data
-        assert "services" in data
+            assert "status" in data
+            assert data["status"] in ["healthy", "degraded", "unhealthy"]
+            assert "version" in data
+            assert "services" in data
 
     @pytest.mark.asyncio
-    async def test_root_endpoint(self, test_client):
+    async def test_root_endpoint(self, real_webhook_server):
         """Test root endpoint returns API info."""
-        response = test_client.get("/")
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
+            response = await client.get("/")
 
-        assert response.status_code == 200
-        data = response.json()
+            assert response.status_code == 200
+            data = response.json()
 
-        assert "name" in data
-        assert "version" in data
-        assert "docs" in data
-        assert data["name"] == "Summary Bot NG API"
+            assert "name" in data
+            assert "version" in data
+            assert "docs" in data
+            assert data["name"] == "Summary Bot NG API"
 
     @pytest.mark.asyncio
     async def test_full_api_request_flow(self, real_webhook_server, sample_messages):
         """Test complete API request flow from request to response."""
         # Use async client for async testing
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Prepare request payload
             from src.models.message import ProcessedMessage
 
@@ -139,7 +144,10 @@ class TestWebhookAPIIntegration:
     @pytest.mark.asyncio
     async def test_authentication_required(self, real_webhook_server):
         """Test that authentication is required for protected endpoints."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Try without API key
             response = await client.post(
                 "/api/v1/summaries",
@@ -152,7 +160,10 @@ class TestWebhookAPIIntegration:
     @pytest.mark.asyncio
     async def test_rate_limiting_enforcement(self, real_webhook_server):
         """Test that rate limiting is enforced on API endpoints."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Make multiple rapid requests
             responses = []
             for i in range(10):
@@ -175,7 +186,10 @@ class TestWebhookAPIIntegration:
     @pytest.mark.asyncio
     async def test_concurrent_api_requests(self, real_webhook_server, sample_messages):
         """Test handling multiple concurrent API requests."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Create multiple request payloads
             from src.models.message import ProcessedMessage
 
@@ -232,7 +246,10 @@ class TestWebhookAPIIntegration:
     @pytest.mark.asyncio
     async def test_error_handling_in_api(self, real_webhook_server):
         """Test error handling in API endpoints."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Send invalid payload
             invalid_payload = {
                 "messages": [],  # Empty messages - should fail
@@ -256,7 +273,10 @@ class TestWebhookAPIIntegration:
     @pytest.mark.asyncio
     async def test_cors_headers(self, real_webhook_server):
         """Test CORS headers are properly set."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Make OPTIONS request
             response = await client.options(
                 "/api/v1/summaries",
@@ -273,7 +293,10 @@ class TestWebhookAPIIntegration:
     @pytest.mark.asyncio
     async def test_gzip_compression(self, real_webhook_server):
         """Test that GZip compression is working."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             response = await client.get(
                 "/health",
                 headers={"Accept-Encoding": "gzip"}
@@ -297,7 +320,10 @@ class TestWebhookDatabaseIntegration:
     @pytest.mark.asyncio
     async def test_summary_retrieval(self, real_webhook_server):
         """Test retrieving stored summaries via API."""
-        async with AsyncClient(app=real_webhook_server.app, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=real_webhook_server.app),
+            base_url="http://test"
+        ) as client:
             # Try to get summaries list
             response = await client.get(
                 "/api/v1/summaries",

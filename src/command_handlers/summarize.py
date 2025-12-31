@@ -63,6 +63,45 @@ class SummarizeCommandHandler(BaseCommandHandler):
         # This is a placeholder - actual routing happens in handle_* methods
         pass
 
+    async def fetch_messages(self, channel: discord.TextChannel, limit: int = 100) -> list[discord.Message]:
+        """
+        Fetch messages from a Discord channel.
+
+        This is a convenience method for fetching messages with a simple limit.
+        For time-based fetching, use _fetch_and_process_messages instead.
+
+        Args:
+            channel: Discord text channel to fetch from
+            limit: Maximum number of messages to fetch
+
+        Returns:
+            List of Discord messages
+        """
+        messages = []
+        async for message in channel.history(limit=limit):
+            messages.append(message)
+        return messages
+
+    async def fetch_recent_messages(self, channel: discord.TextChannel, time_delta: timedelta) -> list[discord.Message]:
+        """
+        Fetch recent messages from a channel within a time window.
+
+        Args:
+            channel: Discord text channel to fetch from
+            time_delta: Time window to fetch messages from (e.g., timedelta(hours=1))
+
+        Returns:
+            List of Discord messages within the time window
+        """
+        now = datetime.utcnow()
+        after_time = now - time_delta
+
+        messages = []
+        async for message in channel.history(limit=1000, after=after_time):
+            messages.append(message)
+
+        return messages
+
     async def handle_summarize(self,
                               interaction: discord.Interaction,
                               channel: Optional[discord.TextChannel] = None,
@@ -86,8 +125,35 @@ class SummarizeCommandHandler(BaseCommandHandler):
         await self.defer_response(interaction)
 
         try:
+            # Check permissions
+            if self.permission_manager:
+                # Check command permission
+                has_permission = await self.permission_manager.check_command_permission(
+                    user_id=str(interaction.user.id),
+                    command="summarize",
+                    guild_id=str(interaction.guild_id) if interaction.guild else None
+                )
+
+                if not has_permission:
+                    error_msg = "You don't have permission to use this command."
+                    await interaction.response.send_message(content=error_msg, ephemeral=True)
+                    return
+
             # Determine target channel
             target_channel = channel or interaction.channel
+
+            # Check channel access permission
+            if self.permission_manager and target_channel:
+                has_access = await self.permission_manager.check_channel_access(
+                    user_id=str(interaction.user.id),
+                    channel_id=str(target_channel.id),
+                    guild_id=str(interaction.guild_id) if interaction.guild else None
+                )
+
+                if not has_access:
+                    error_msg = f"You don't have access to {target_channel.mention}."
+                    await interaction.followup.send(content=error_msg, ephemeral=True)
+                    return
             if not isinstance(target_channel, discord.TextChannel):
                 raise UserError(
                     message=f"Invalid channel type: {type(target_channel)}",
@@ -151,19 +217,25 @@ class SummarizeCommandHandler(BaseCommandHandler):
             )
             await interaction.followup.send(embed=status_embed)
 
-            # Fetch and process messages
-            processed_messages = await self._fetch_and_process_messages(
-                target_channel,
-                parsed_start,
-                parsed_end,
+            # Fetch messages first (for testability)
+            raw_messages = await self.fetch_messages(target_channel, limit=10000)
+
+            # Filter messages by time range
+            time_filtered_messages = [
+                msg for msg in raw_messages
+                if parsed_start <= msg.created_at <= parsed_end
+            ]
+
+            # Then process them
+            processed_messages = await self._process_messages(
+                time_filtered_messages,
                 summary_options
             )
 
             if len(processed_messages) < summary_options.min_messages:
                 raise InsufficientContentError(
                     message_count=len(processed_messages),
-                    min_required=summary_options.min_messages,
-                    user_message=f"Not enough messages to summarize. Found {len(processed_messages)}, need at least {summary_options.min_messages}."
+                    min_required=summary_options.min_messages
                 )
 
             # Create summarization context
@@ -230,14 +302,46 @@ class SummarizeCommandHandler(BaseCommandHandler):
                     user_message="Minutes must be between 5 and 1440 (24 hours)."
                 )
 
-            # Use brief summary for quick summaries
-            await self.handle_summarize(
-                interaction=interaction,
-                channel=interaction.channel,
-                hours=minutes / 60,
-                length="brief",
+            # Fetch recent messages using the dedicated method
+            target_channel = interaction.channel
+            time_delta = timedelta(minutes=minutes)
+            raw_messages = await self.fetch_recent_messages(target_channel, time_delta)
+
+            # Process messages
+            summary_options = SummaryOptions(
+                summary_length=SummaryLength.BRIEF,
                 include_bots=False
             )
+            processed_messages = await self._process_messages(raw_messages, summary_options)
+
+            if len(processed_messages) < summary_options.min_messages:
+                raise InsufficientContentError(
+                    message_count=len(processed_messages),
+                    min_required=summary_options.min_messages
+                )
+
+            # Create summarization context
+            context = SummarizationContext(
+                channel_name=target_channel.name,
+                guild_name=interaction.guild.name,
+                total_participants=len(set(msg.author_id for msg in processed_messages)),
+                time_span_hours=minutes / 60
+            )
+
+            # Generate summary
+            summary_result = await self.summarization_engine.summarize_messages(
+                messages=processed_messages,
+                options=summary_options,
+                context=context,
+                channel_id=str(target_channel.id),
+                guild_id=str(interaction.guild_id)
+            )
+
+            # Send summary as embed
+            summary_embed_dict = summary_result.to_embed_dict()
+            summary_embed = discord.Embed.from_dict(summary_embed_dict)
+
+            await interaction.followup.send(embed=summary_embed)
 
         except Exception as e:
             logger.exception(f"Quick summary failed: {e}")
@@ -272,42 +376,19 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def _fetch_and_process_messages(self,
-                                         channel: discord.TextChannel,
-                                         start_time: datetime,
-                                         end_time: datetime,
-                                         options: SummaryOptions) -> List[ProcessedMessage]:
+    async def _process_messages(self,
+                               raw_messages: List[discord.Message],
+                               options: SummaryOptions) -> List[ProcessedMessage]:
         """
-        Fetch and process messages from a channel.
+        Process raw Discord messages into ProcessedMessages.
 
         Args:
-            channel: Discord text channel
-            start_time: Start of time range
-            end_time: End of time range
-            options: Summary options
+            raw_messages: List of raw Discord messages
+            options: Summary options for filtering
 
         Returns:
             List of processed messages
         """
-        # Fetch messages from Discord
-        if self.message_fetcher:
-            raw_messages = await self.message_fetcher.fetch_messages(
-                channel_id=str(channel.id),
-                start_time=start_time,
-                end_time=end_time,
-                limit=10000
-            )
-        else:
-            # Fallback: fetch directly from channel
-            raw_messages = []
-            async for message in channel.history(
-                limit=10000,
-                after=start_time,
-                before=end_time,
-                oldest_first=True
-            ):
-                raw_messages.append(message)
-
         if not raw_messages:
             return []
 
@@ -346,6 +427,44 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 processed_messages.append(processed)
 
         return processed_messages
+
+    async def _fetch_and_process_messages(self,
+                                         channel: discord.TextChannel,
+                                         start_time: datetime,
+                                         end_time: datetime,
+                                         options: SummaryOptions) -> List[ProcessedMessage]:
+        """
+        Fetch and process messages from a channel.
+
+        Args:
+            channel: Discord text channel
+            start_time: Start of time range
+            end_time: End of time range
+            options: Summary options
+
+        Returns:
+            List of processed messages
+        """
+        # Fetch messages from Discord
+        if self.message_fetcher:
+            raw_messages = await self.message_fetcher.fetch_messages(
+                channel_id=str(channel.id),
+                start_time=start_time,
+                end_time=end_time,
+                limit=10000
+            )
+        else:
+            # Fallback: fetch directly from channel
+            raw_messages = []
+            async for message in channel.history(
+                limit=10000,
+                after=start_time,
+                before=end_time,
+                oldest_first=True
+            ):
+                raw_messages.append(message)
+
+        return await self._process_messages(raw_messages, options)
 
     async def estimate_summary_cost(self,
                                    interaction: discord.Interaction,
