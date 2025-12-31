@@ -1,5 +1,6 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "build": { "dockerfile": "Dockerfile" },
+
   "runArgs": [],
   "remoteUser": "vscode",
 
@@ -21,19 +22,11 @@
   },
 
   "postCreateCommand": [
-  "set -euo pipefail",
-  "sudo apt-get update",
-  "sudo apt-get install -y --no-install-recommends build-essential curl git pkg-config libffi-dev libssl-dev",
-  "npm install -g @anthropic-ai/claude-code",
-  "npm install -g agentic-flow@1.10.2",
-  "python -m pip install --user --upgrade pip pipx",
-  "python -m pipx ensurepath",
-  "export PATH=\"$HOME/.local/bin:$PATH\"",
-  "if command -v poetry >/dev/null 2>&1; then pipx upgrade poetry || true; else pipx install poetry; fi",
-  "poetry env use \"$(command -v python)\" || true",
-  "poetry install"
+    "export PATH=\"$HOME/.local/bin:$PATH\"",
+    "if command -v poetry >/dev/null 2>&1; then pipx upgrade poetry || true; else pipx install poetry; fi",
+    "poetry env use \"$(command -v python)\" || true",
+    "poetry install"
 ],
-
   "postStartCommand": "bash -lc 'if [ -n \"$ANTHROPIC_API_KEY\" ]; then echo \"Claude key present\"; else echo \"⚠ Set ANTHROPIC_API_KEY or run claude login\"; fi'",
 
   "customizations": {
