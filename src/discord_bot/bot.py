@@ -43,7 +43,12 @@ class SummaryBot:
 
         # Initialize Discord client
         self.client = discord.Client(intents=intents)
-        self.client.tree = discord.app_commands.CommandTree(self.client)
+        # Create command tree - catch exception if client already has one (E2E tests)
+        try:
+            self.client.tree = discord.app_commands.CommandTree(self.client)
+        except discord.errors.ClientException:
+            # Tree already exists (common in E2E tests), use existing one
+            logger.debug("Client already has CommandTree, using existing tree")
 
         # Initialize components
         self.event_handler = EventHandler(self)

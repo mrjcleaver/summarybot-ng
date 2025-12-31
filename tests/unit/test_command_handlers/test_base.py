@@ -173,10 +173,16 @@ class TestBaseCommandHandler:
         # Next request should be rate limited
         await concrete_handler.handle_command(mock_interaction)
 
-        # Should send rate limit response
+        # Should send rate limit response with embed
         assert mock_interaction.response.send_message.called
         call_args = mock_interaction.response.send_message.call_args
-        assert "Rate Limit" in str(call_args)
+        # Check that an embed was passed
+        assert 'embed' in call_args.kwargs or (call_args.args and hasattr(call_args.args[0], 'title'))
+        # Extract the embed
+        embed = call_args.kwargs.get('embed') if 'embed' in call_args.kwargs else (call_args.args[0] if call_args.args else None)
+        assert embed is not None
+        # Check that the embed contains rate limit information
+        assert hasattr(embed, 'title') and "Rate Limit" in embed.title
 
     @pytest.mark.asyncio
     async def test_handle_command_without_rate_limit(self, mock_summarization_engine, mock_interaction):

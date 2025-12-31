@@ -329,7 +329,15 @@ class BaseCommandHandler(ABC):
         )
 
         try:
-            if interaction.response.is_done():
+            import inspect
+            # Handle both sync and async is_done() for testing flexibility
+            is_done_result = interaction.response.is_done()
+            if inspect.iscoroutine(is_done_result):
+                is_done = await is_done_result
+            else:
+                is_done = is_done_result
+
+            if is_done:
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
                 await interaction.response.send_message(embed=embed, ephemeral=True)

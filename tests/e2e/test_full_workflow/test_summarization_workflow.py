@@ -6,6 +6,7 @@ summary generation and delivery, with minimal mocking.
 """
 
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 import asyncio
@@ -21,8 +22,8 @@ from tests.fixtures.discord_fixtures import create_mock_messages, create_mock_in
 @pytest.mark.e2e
 class TestCompleteWorkflow:
     """Test complete end-to-end workflows."""
-    
-    @pytest.fixture
+
+    @pytest_asyncio.fixture
     async def temp_config_file(self):
         """Create temporary configuration file."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
@@ -52,8 +53,8 @@ class TestCompleteWorkflow:
         
         # Cleanup
         os.unlink(f.name)
-    
-    @pytest.fixture
+
+    @pytest_asyncio.fixture
     async def service_container(self, temp_config_file):
         """Create service container with real dependencies."""
         from src.config.settings import ConfigManager
@@ -71,8 +72,8 @@ class TestCompleteWorkflow:
             
             container.configure_services()
             yield container
-    
-    @pytest.fixture
+
+    @pytest_asyncio.fixture
     async def discord_bot_instance(self, service_container):
         """Create Discord bot instance with real service container."""
         config = service_container.config

@@ -266,7 +266,16 @@ class ScheduledTask(BaseModel):
         }
 
 
-@dataclass 
+@dataclass
+class SummaryTask(ScheduledTask):
+    """Convenience class for summary tasks (alias for ScheduledTask with SUMMARY type)."""
+
+    def __post_init__(self):
+        """Ensure task type is set to SUMMARY."""
+        self.task_type = TaskType.SUMMARY
+
+
+@dataclass
 class TaskResult(BaseModel):
     """Result of a task execution."""
     task_id: str
