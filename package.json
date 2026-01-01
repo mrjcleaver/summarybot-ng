@@ -1,5 +1,17 @@
 {
   "dependencies": {
     "agentic-flow": "^1.10.2"
+  },
+  "scripts": {
+    "test": "poetry run pytest tests/",
+    "test:unit": "poetry run pytest tests/unit/",
+    "test:integration": "poetry run pytest tests/integration/",
+    "test:coverage": "poetry run pytest --cov=src --cov-report=html --cov-report=term",
+    "build": "poetry build",
+    "lint": "poetry run ruff check src/ tests/",
+    "lint:fix": "poetry run ruff check --fix src/ tests/",
+    "typecheck": "poetry run mypy src/",
+    "format": "poetry run black src/ tests/",
+    "format:check": "poetry run black --check src/ tests/"
   }
 }

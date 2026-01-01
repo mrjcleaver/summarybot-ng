@@ -131,11 +131,20 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
         Returns:
             List of Discord messages
+
+        Raises:
+            ChannelAccessError: If the bot lacks permissions to read messages
         """
-        messages = []
-        async for message in channel.history(limit=limit):
-            messages.append(message)
-        return messages
+        try:
+            messages = []
+            async for message in channel.history(limit=limit):
+                messages.append(message)
+            return messages
+        except discord.errors.Forbidden as e:
+            raise ChannelAccessError(
+                channel_id=str(channel.id),
+                reason=f"I don't have permission to read messages in {channel.mention}. Please ensure I have 'Read Message History' permission."
+            ) from e
 
     async def fetch_recent_messages(self, channel: discord.TextChannel, time_delta: timedelta) -> list[discord.Message]:
         """
@@ -147,15 +156,24 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
         Returns:
             List of Discord messages within the time window
+
+        Raises:
+            ChannelAccessError: If the bot lacks permissions to read messages
         """
-        now = datetime.utcnow()
-        after_time = now - time_delta
+        try:
+            now = datetime.utcnow()
+            after_time = now - time_delta
 
-        messages = []
-        async for message in channel.history(limit=1000, after=after_time):
-            messages.append(message)
+            messages = []
+            async for message in channel.history(limit=1000, after=after_time):
+                messages.append(message)
 
-        return messages
+            return messages
+        except discord.errors.Forbidden as e:
+            raise ChannelAccessError(
+                channel_id=str(channel.id),
+                reason=f"I don't have permission to read messages in {channel.mention}. Please ensure I have 'Read Message History' permission."
+            ) from e
 
     async def handle_summarize(self,
                               interaction: discord.Interaction,
@@ -337,29 +355,41 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
     async def handle_quick_summary(self,
                                   interaction: discord.Interaction,
-                                  minutes: int = 60) -> None:
+                                  minutes: int = 60,
+                                  channel: Optional[discord.TextChannel] = None,
+                                  message_count: Optional[int] = None) -> None:
         """
         Handle quick summary command for recent messages.
 
         Args:
             interaction: Discord interaction object
             minutes: Number of minutes to look back (default: 60)
+            channel: Target channel (defaults to interaction.channel)
+            message_count: Number of messages to summarize (overrides time-based)
         """
         await self.defer_response(interaction)
 
         try:
-            # Validate minutes
-            if minutes < 5 or minutes > 1440:  # 5 min to 24 hours
-                raise UserError(
-                    message=f"Invalid minutes: {minutes}",
-                    error_code="INVALID_DURATION",
-                    user_message="Minutes must be between 5 and 1440 (24 hours)."
-                )
+            # Determine target channel
+            target_channel = channel or interaction.channel
 
-            # Fetch recent messages using the dedicated method
-            target_channel = interaction.channel
-            time_delta = timedelta(minutes=minutes)
-            raw_messages = await self.fetch_recent_messages(target_channel, time_delta)
+            # Fetch messages based on mode
+            if message_count:
+                # Message count mode
+                raw_messages = await self.fetch_messages(target_channel, limit=message_count)
+            else:
+                # Time-based mode
+                # Validate minutes
+                if minutes < 5 or minutes > 1440:  # 5 min to 24 hours
+                    raise UserError(
+                        message=f"Invalid minutes: {minutes}",
+                        error_code="INVALID_DURATION",
+                        user_message="Minutes must be between 5 and 1440 (24 hours)."
+                    )
+
+                # Fetch recent messages using the dedicated method
+                time_delta = timedelta(minutes=minutes)
+                raw_messages = await self.fetch_recent_messages(target_channel, time_delta)
 
             # Process messages
             summary_options = SummaryOptions(
@@ -375,11 +405,12 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 )
 
             # Create summarization context
+            time_span = minutes / 60 if not message_count else 0
             context = SummarizationContext(
                 channel_name=target_channel.name,
                 guild_name=interaction.guild.name,
                 total_participants=len(set(msg.author_id for msg in processed_messages)),
-                time_span_hours=minutes / 60
+                time_span_hours=time_span
             )
 
             # Generate summary
