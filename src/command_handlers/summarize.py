@@ -63,6 +63,61 @@ class SummarizeCommandHandler(BaseCommandHandler):
         # This is a placeholder - actual routing happens in handle_* methods
         pass
 
+    async def handle_summarize_interaction(
+        self,
+        interaction: discord.Interaction,
+        messages: Optional[int] = None,
+        hours: Optional[int] = None,
+        minutes: Optional[int] = None
+    ) -> None:
+        """
+        Handle /summarize slash command interaction.
+
+        This is the main entry point from Discord slash commands.
+
+        Args:
+            interaction: Discord interaction (already deferred)
+            messages: Number of messages to summarize (overrides time-based)
+            hours: Hours of messages to look back
+            minutes: Minutes of messages to look back
+        """
+        try:
+            # Default to 100 messages or 24 hours
+            if messages:
+                # Message count mode
+                await self.handle_quick_summary(
+                    interaction,
+                    channel=interaction.channel,
+                    message_count=messages
+                )
+            elif hours or minutes:
+                # Time-based mode
+                total_hours = (hours or 0) + (minutes or 0) / 60
+                await self.handle_summarize(
+                    interaction,
+                    channel=interaction.channel,
+                    hours=int(total_hours) if total_hours > 0 else 24,
+                    length="detailed",
+                    include_bots=False
+                )
+            else:
+                # Default: last 100 messages
+                await self.handle_quick_summary(
+                    interaction,
+                    channel=interaction.channel,
+                    message_count=100
+                )
+
+        except Exception as e:
+            logger.error(f"Error in handle_summarize_interaction: {e}", exc_info=True)
+            try:
+                await interaction.followup.send(
+                    f"❌ Failed to create summary: {str(e)}",
+                    ephemeral=True
+                )
+            except:
+                pass
+
     async def fetch_messages(self, channel: discord.TextChannel, limit: int = 100) -> list[discord.Message]:
         """
         Fetch messages from a Discord channel.

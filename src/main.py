@@ -161,10 +161,19 @@ class SummaryBotApp:
         # Initialize message processor
         self.message_processor = MessageProcessor(self.discord_bot.client)
 
-        # TODO: Integrate command handlers with bot's CommandRegistry
-        # For now, the bot uses basic commands defined in CommandRegistry
-        # Command handlers (SummarizeCommandHandler, ConfigCommandHandler) are available
-        # but need to be integrated into the command tree
+        # Initialize command handlers and wire them into the bot
+        summarize_handler = SummarizeCommandHandler(
+            summarization_engine=self.summarization_engine,
+            permission_manager=self.permission_manager,
+            message_fetcher=None,  # Will use direct Discord API calls
+            message_filter=None,
+            message_cleaner=None
+        )
+
+        # Add command handler to bot services
+        if not self.discord_bot.services:
+            self.discord_bot.services = {}
+        self.discord_bot.services['summarize_handler'] = summarize_handler
 
         # Event handlers are already registered in SummaryBot.__init__
         # Slash commands will be set up when bot starts

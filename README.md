@@ -2,7 +2,7 @@
 
 > An intelligent Discord bot that generates comprehensive summaries of conversations using AI-powered analysis
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
 [![Discord](https://img.shields.io/badge/Discord-Bot-7289DA.svg)](https://discord.com)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991.svg)](https://openai.com)
 [![Poetry](https://img.shields.io/badge/Poetry-Dependency%20Management-blue.svg)](https://python-poetry.org)
@@ -60,9 +60,9 @@ Summary Bot NG is an advanced Discord bot that transforms lengthy conversations 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python 3.9 or higher
 - Discord Bot Token
-- OpenAI API Key
+- Anthropic Claude API Key
 - Poetry for dependency management
 
 ### Installation
@@ -79,8 +79,12 @@ cp .env.example .env
 # Edit .env with your API keys
 
 # Run the bot
-poetry run python src/main.py
+poetry run python -m src.main
 ```
+
+Notes:
+- `src/main.py` uses package-relative imports, so it must be run as a module (`python -m src.main`).
+- If you’re using Poetry 2.x, `poetry shell` is not installed by default; prefer `poetry run ...`.
 
 ### Discord Setup
 1. Create a Discord application at https://discord.com/developers/applications

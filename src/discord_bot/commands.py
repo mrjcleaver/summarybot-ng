@@ -25,6 +25,7 @@ class CommandRegistry:
         """
         self.bot = bot
         self.tree = bot.client.tree
+        self.command_handlers = {}  # Store command handler instances
 
     async def setup_commands(self) -> None:
         """
@@ -33,6 +34,54 @@ class CommandRegistry:
         This method registers all command handlers with the command tree.
         """
         logger.info("Setting up slash commands...")
+
+        # Register /summarize command
+        @self.tree.command(
+            name="summarize",
+            description="Create an AI-powered summary of recent channel messages"
+        )
+        @discord.app_commands.describe(
+            messages="Number of messages to summarize (default: 100)",
+            hours="Summarize messages from the last N hours",
+            minutes="Summarize messages from the last N minutes"
+        )
+        async def summarize_command(
+            interaction: discord.Interaction,
+            messages: Optional[int] = None,
+            hours: Optional[int] = None,
+            minutes: Optional[int] = None
+        ):
+            """Summarize recent channel messages."""
+            # Defer response since summarization takes time
+            await interaction.response.defer(ephemeral=False)
+
+            try:
+                # Get the command handler from bot services
+                handler = self.bot.services.get('summarize_handler')
+                if not handler:
+                    await interaction.followup.send(
+                        "❌ Summarization service is not available",
+                        ephemeral=True
+                    )
+                    return
+
+                # Call the handler's method
+                await handler.handle_summarize_interaction(
+                    interaction,
+                    messages=messages,
+                    hours=hours,
+                    minutes=minutes
+                )
+
+            except Exception as e:
+                logger.error(f"Error in summarize command: {e}", exc_info=True)
+                try:
+                    await interaction.followup.send(
+                        f"❌ An error occurred: {str(e)}",
+                        ephemeral=True
+                    )
+                except:
+                    pass
 
         # Register help command
         @self.tree.command(
@@ -54,8 +103,14 @@ class CommandRegistry:
             )
 
             embed.add_field(
-                name="/config",
-                value="Configure bot settings for this server",
+                name="/status",
+                value="Check the bot's current status and health",
+                inline=False
+            )
+
+            embed.add_field(
+                name="/ping",
+                value="Check the bot's response time",
                 inline=False
             )
 
