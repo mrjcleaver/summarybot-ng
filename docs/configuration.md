@@ -28,17 +28,33 @@ DISCORD_GUILD_ID=your_server_id
 DISCORD_APPLICATION_ID=your_application_id
 ```
 
-#### OpenAI Configuration
+#### AI Provider Configuration
+
+**Development vs Production:**
+- **Development**: Use Claude Direct (Anthropic API)
+- **Production/Runtime**: Use OpenRouter (Proxy)
+
+##### Claude Direct (Development)
 ```env
-# OpenAI API Key (Required)
-OPENAI_API_KEY=your_openai_api_key
-
-# OpenAI Model (Optional)
-OPENAI_MODEL=gpt-4
-
-# OpenAI Organization ID (Optional)
-OPENAI_ORG_ID=your_org_id
+# Use direct Anthropic API for development
+LLM_ROUTE=anthropic
+CLAUDE_API_KEY=sk-ant-your_api_key_here
 ```
+
+##### OpenRouter (Production)
+```env
+# Use OpenRouter proxy for production
+LLM_ROUTE=openrouter
+OPENROUTER_API_KEY=sk-or-v1-your_openrouter_api_key_here
+OPENROUTER_MODEL=anthropic/claude-3-sonnet-20240229
+
+# Optional: Claude key for fallback
+CLAUDE_API_KEY=sk-ant-bypass-for-openrouter
+```
+
+**Auto-Detection**: If `LLM_ROUTE` is not set, the system automatically detects the environment:
+- Development environments → Claude Direct
+- Production environments (Railway, Render, Heroku, etc.) → OpenRouter
 
 ### Optional Variables
 
