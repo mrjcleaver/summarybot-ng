@@ -25,6 +25,15 @@
   ],
   "postStartCommand": "bash -lc 'if [ -n \"$ANTHROPIC_API_KEY\" ]; then echo \"Claude key present\"; else echo \"⚠ Set ANTHROPIC_API_KEY or run claude login\"; fi'",
 
+  "forwardPorts": [5000],
+  "portsAttributes": {
+    "5000": {
+      "label": "Summary Bot Webhook API",
+      "onAutoForward": "silent",
+      "protocol": "http"
+    }
+  },
+
   "customizations": {
     "vscode": {
       "extensions": [
