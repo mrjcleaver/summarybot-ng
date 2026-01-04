@@ -97,10 +97,10 @@ class ClaudeClient:
         "claude-3-5-sonnet-20240620": (0.003, 0.015),
     }
     
-    def __init__(self, api_key: str, base_url: Optional[str] = None, 
+    def __init__(self, api_key: str, base_url: Optional[str] = None,
                  default_timeout: int = 120, max_retries: int = 3):
         """Initialize Claude client.
-        
+
         Args:
             api_key: Anthropic API key
             base_url: Optional custom base URL
@@ -108,17 +108,21 @@ class ClaudeClient:
             max_retries: Maximum number of retries for failed requests
         """
         self.api_key = api_key
+        self.base_url = base_url
         self.default_timeout = default_timeout
         self.max_retries = max_retries
         self.usage_stats = UsageStats()
-        
+
+        # Detect if using OpenRouter
+        self.is_openrouter = base_url and 'openrouter' in base_url.lower()
+
         # Initialize async client
         client_kwargs = {"api_key": api_key, "timeout": default_timeout}
         if base_url:
             client_kwargs["base_url"] = base_url
-        
+
         self._client = AsyncAnthropic(**client_kwargs)
-        
+
         # Rate limiting
         self._last_request_time = 0
         self._min_request_interval = 0.1  # Minimum seconds between requests
@@ -132,6 +136,49 @@ class ClaudeClient:
         # The AsyncAnthropic client doesn't require explicit cleanup
         # This method exists for compatibility with container lifecycle
         pass
+
+    def _normalize_model_name(self, model: str) -> str:
+        """Normalize model name for the current provider.
+
+        When using OpenRouter, converts to OpenRouter format (e.g., 'anthropic/claude-3-sonnet').
+        When using Claude Direct, uses dated format (e.g., 'claude-3-sonnet-20240229').
+
+        Args:
+            model: Model name (e.g., 'claude-3-sonnet-20240229' or 'anthropic/claude-3-sonnet')
+
+        Returns:
+            Normalized model name for the current provider
+        """
+        # Mapping from Claude Direct model names to OpenRouter model names
+        # Note: Claude 3.0 Sonnet is not available on OpenRouter, use 3.5 Sonnet instead
+        openrouter_model_map = {
+            'claude-3-sonnet-20240229': 'anthropic/claude-3.5-sonnet',  # Upgraded to 3.5
+            'claude-3-opus-20240229': 'anthropic/claude-3-opus',
+            'claude-3-haiku-20240307': 'anthropic/claude-3-haiku',
+            'claude-3-5-sonnet-20240620': 'anthropic/claude-3.5-sonnet',
+            'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet',
+        }
+
+        if self.is_openrouter:
+            # OpenRouter requires provider prefix and no date suffix
+            # If model is already in OpenRouter format, return as-is
+            if model.startswith('anthropic/'):
+                return model
+
+            # Try to map from Claude Direct format to OpenRouter format
+            if model in openrouter_model_map:
+                return openrouter_model_map[model]
+
+            # Fallback: add prefix and remove date suffix pattern
+            # Remove patterns like -YYYYMMDD or -YYYYMMDD
+            import re
+            base_model = re.sub(r'-\d{8}$', '', model)
+            return f'anthropic/{base_model}'
+        else:
+            # Claude Direct doesn't use provider prefix
+            if model.startswith('anthropic/'):
+                return model.replace('anthropic/', '', 1)
+            return model
 
     async def create_summary(self, 
                             prompt: str,
@@ -154,30 +201,39 @@ class ClaudeClient:
         """
         # Apply rate limiting
         await self._apply_rate_limiting()
-        
-        # Validate model
-        if options.model not in self.MODEL_COSTS:
+
+        # Normalize model name for current provider
+        normalized_model = self._normalize_model_name(options.model)
+
+        # Debug logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"ClaudeClient: Original model={options.model}, Normalized model={normalized_model}, Is OpenRouter={self.is_openrouter}")
+
+        # Validate model (check base model name without provider prefix)
+        base_model = options.model.replace('anthropic/', '')
+        if base_model not in self.MODEL_COSTS:
             available_models = ", ".join(self.MODEL_COSTS.keys())
             raise ModelUnavailableError(
                 options.model,
                 context={"available_models": available_models}
             )
-        
-        # Prepare request parameters
-        request_params = self._build_request_params(prompt, system_prompt, options)
+
+        # Prepare request parameters with normalized model
+        request_params = self._build_request_params(prompt, system_prompt, options, normalized_model)
         
         # Execute request with retries
         for attempt in range(self.max_retries + 1):
             try:
                 response = await self._make_request(request_params, attempt)
-                
-                # Process successful response
-                claude_response = self._process_response(response, options.model)
-                
+
+                # Process successful response (use normalized model name)
+                claude_response = self._process_response(response, normalized_model)
+
                 # Update usage stats
                 cost = self._calculate_cost(claude_response)
                 self.usage_stats.add_request(claude_response, cost)
-                
+
                 return claude_response
                 
             except anthropic.RateLimitError as e:
@@ -270,23 +326,26 @@ class ClaudeClient:
         """Get current usage statistics."""
         return self.usage_stats
     
-    def estimate_cost(self, input_tokens: int, output_tokens: int, 
+    def estimate_cost(self, input_tokens: int, output_tokens: int,
                      model: str) -> float:
         """Estimate cost for token usage.
-        
+
         Args:
             input_tokens: Number of input tokens
-            output_tokens: Number of output tokens  
-            model: Model name
-            
+            output_tokens: Number of output tokens
+            model: Model name (with or without provider prefix)
+
         Returns:
             Estimated cost in USD
         """
-        if model not in self.MODEL_COSTS:
+        # Remove provider prefix for cost lookup
+        base_model = model.replace('anthropic/', '')
+
+        if base_model not in self.MODEL_COSTS:
             return 0.0
-        
-        input_cost, output_cost = self.MODEL_COSTS[model]
-        
+
+        input_cost, output_cost = self.MODEL_COSTS[base_model]
+
         # Costs are per 1K tokens
         total_cost = (input_tokens * input_cost + output_tokens * output_cost) / 1000
         return round(total_cost, 6)
@@ -301,11 +360,18 @@ class ClaudeClient:
         
         self._last_request_time = time.time()
     
-    def _build_request_params(self, prompt: str, system_prompt: str, 
-                             options: ClaudeOptions) -> Dict[str, Any]:
-        """Build request parameters for Claude API."""
+    def _build_request_params(self, prompt: str, system_prompt: str,
+                             options: ClaudeOptions, model: Optional[str] = None) -> Dict[str, Any]:
+        """Build request parameters for Claude API.
+
+        Args:
+            prompt: User prompt
+            system_prompt: System prompt
+            options: Claude options
+            model: Optional normalized model name (defaults to options.model if not provided)
+        """
         params = {
-            "model": options.model,
+            "model": model or options.model,
             "max_tokens": options.max_tokens,
             "temperature": options.temperature,
             "system": system_prompt,

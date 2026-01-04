@@ -22,7 +22,7 @@ class EnvironmentLoader:
         
         # Required environment variables
         discord_token = EnvironmentLoader._get_required_env('DISCORD_TOKEN')
-        claude_api_key = EnvironmentLoader._get_required_env('CLAUDE_API_KEY')
+        # Claude API key not needed - bot always uses OpenRouter
         
         # Database configuration
         database_config = None
@@ -67,7 +67,6 @@ class EnvironmentLoader:
         
         return BotConfig(
             discord_token=discord_token,
-            claude_api_key=claude_api_key,
             guild_configs=guild_configs,
             webhook_config=webhook_config,
             database_config=database_config,

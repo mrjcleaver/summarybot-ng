@@ -20,10 +20,9 @@ class ConfigValidator:
         
         # Validate Discord token format
         errors.extend(ConfigValidator._validate_discord_token(config.discord_token))
-        
-        # Validate Claude API key format
-        errors.extend(ConfigValidator._validate_claude_api_key(config.claude_api_key))
-        
+
+        # Claude API key validation removed - bot always uses OpenRouter
+
         # Validate webhook configuration
         errors.extend(ConfigValidator._validate_webhook_config(config))
         
@@ -46,10 +45,9 @@ class ConfigValidator:
         
         if not config.discord_token:
             errors.append("Discord token is required")
-        
-        if not config.claude_api_key:
-            errors.append("Claude API key is required")
-        
+
+        # Claude API key not needed - bot always uses OpenRouter
+
         return errors
     
     @staticmethod

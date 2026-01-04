@@ -151,7 +151,6 @@ class WebhookConfig:
 class BotConfig:
     """Main configuration for the Summary Bot."""
     discord_token: str
-    claude_api_key: str
     guild_configs: Dict[str, GuildConfig] = field(default_factory=dict)
     webhook_config: WebhookConfig = field(default_factory=WebhookConfig)
     database_config: Optional[DatabaseConfig] = None
@@ -182,7 +181,6 @@ class BotConfig:
         """Convert to dictionary for serialization."""
         return {
             'discord_token': '***REDACTED***',  # Never expose token
-            'claude_api_key': '***REDACTED***',  # Never expose API key
             'guild_configs': {
                 guild_id: config.to_dict() 
                 for guild_id, config in self.guild_configs.items()

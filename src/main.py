@@ -12,9 +12,10 @@ This module orchestrates all components of the bot including:
 
 import asyncio
 import logging
+import os
 import signal
 import sys
-from typing import Optional
+from typing import Optional, Tuple
 from pathlib import Path
 
 from .config import ConfigManager, BotConfig
@@ -123,15 +124,89 @@ class SummaryBotApp:
 
         self.logger.info("Database initialized successfully")
 
+    def _select_llm_provider(self) -> Tuple[str, str, Optional[str], str]:
+        """
+        Select LLM provider based on environment.
+
+        Development uses Claude Direct (Anthropic).
+        Production/Runtime uses OpenRouter.
+
+        Returns:
+            tuple: (provider_name, api_key, base_url, model)
+        """
+        llm_route = os.getenv('LLM_ROUTE', '').lower()
+
+        # Explicit configuration takes precedence
+        if llm_route == 'openrouter':
+            openrouter_key = os.getenv('OPENROUTER_API_KEY')
+            if not openrouter_key:
+                raise ValueError(
+                    "LLM_ROUTE is set to 'openrouter' but OPENROUTER_API_KEY is not configured. "
+                    "Please set OPENROUTER_API_KEY in your .env file."
+                )
+            return (
+                'openrouter',
+                openrouter_key,
+                'https://openrouter.ai/api',  # Client appends /v1/messages
+                os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3-sonnet-20240229')
+            )
+
+        # If not explicitly set, always use OpenRouter (no Claude fallback)
+        openrouter_key = os.getenv('OPENROUTER_API_KEY')
+        if not openrouter_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY is required. Bot always uses OpenRouter for LLM requests. "
+                "Please set OPENROUTER_API_KEY in your .env file."
+            )
+
+        return (
+            'openrouter',
+            openrouter_key,
+            'https://openrouter.ai/api',  # Client appends /v1/messages
+            os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3-sonnet-20240229')
+        )
+
+    def _is_production_environment(self) -> bool:
+        """
+        Detect if running in production environment.
+
+        Returns:
+            bool: True if production, False if development
+        """
+        production_indicators = [
+            os.getenv('RAILWAY_ENVIRONMENT'),
+            os.getenv('RENDER'),
+            os.getenv('HEROKU_APP_NAME'),
+            os.getenv('FLY_APP_NAME'),
+            os.getenv('NODE_ENV') == 'production',
+            os.getenv('ENVIRONMENT') == 'production',
+        ]
+        return any(production_indicators)
+
     async def _initialize_core_components(self):
         """Initialize core summarization and message processing components."""
         self.logger.info("Initializing core components...")
 
-        # Initialize Claude client
-        claude_client = ClaudeClient(
-            api_key=self.config.claude_api_key,
-            max_retries=3
+        # Select LLM provider based on environment
+        provider_name, api_key, base_url, model = self._select_llm_provider()
+
+        self.logger.info(
+            f"LLM Provider: {provider_name} | Model: {model} | "
+            f"Environment: {'production' if self._is_production_environment() else 'development'}"
         )
+
+        # Initialize Claude client with selected provider
+        if base_url:
+            claude_client = ClaudeClient(
+                api_key=api_key,
+                base_url=base_url,
+                max_retries=3
+            )
+        else:
+            claude_client = ClaudeClient(
+                api_key=api_key,
+                max_retries=3
+            )
 
         # Initialize cache
         cache_backend = MemoryCache(
