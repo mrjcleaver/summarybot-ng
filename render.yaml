@@ -1,0 +1,49 @@
+services:
+  # Main Discord Bot Service
+  - type: web
+    name: summarybot-ng
+    runtime: docker
+    repo: https://github.com/mrjcleaver/summarybot-ng
+    region: oregon
+    plan: starter
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LLM_ROUTE
+        value: openrouter
+      - key: OPENROUTER_MODEL
+        value: anthropic/claude-3.5-sonnet
+      - key: CACHE_BACKEND
+        value: redis
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: summarybot-redis
+          property: connectionString
+      - key: WEBHOOK_ENABLED
+        value: true
+      - key: WEBHOOK_HOST
+        value: 0.0.0.0
+      - key: WEBHOOK_PORT
+        value: 5000
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        value: sqlite:///data/summarybot.db
+    disk:
+      name: summarybot-data
+      mountPath: /app/data
+      sizeGB: 1
+
+  # Redis Cache Service
+  - type: redis
+    name: summarybot-redis
+    region: oregon
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []

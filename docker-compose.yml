@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # Main Discord Bot Application
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: summarybot-ng
+    restart: unless-stopped
+    environment:
+      # Discord Configuration
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+
+      # LLM Provider Configuration
+      - LLM_ROUTE=${LLM_ROUTE:-openrouter}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-anthropic/claude-3.5-sonnet}
+
+      # Database Configuration
+      - DATABASE_URL=sqlite:///data/summarybot.db
+
+      # Cache Configuration (use Redis in production)
+      - CACHE_BACKEND=${CACHE_BACKEND:-redis}
+      - REDIS_URL=redis://redis:6379/0
+      - CACHE_DEFAULT_TTL=${CACHE_DEFAULT_TTL:-3600}
+      - CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-1000}
+
+      # Webhook Configuration
+      - WEBHOOK_ENABLED=${WEBHOOK_ENABLED:-true}
+      - WEBHOOK_HOST=0.0.0.0
+      - WEBHOOK_PORT=5000
+      - WEBHOOK_CORS_ORIGINS=${WEBHOOK_CORS_ORIGINS:-*}
+
+      # Application Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MAX_MESSAGE_BATCH=${MAX_MESSAGE_BATCH:-10000}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+    ports:
+      - "5000:5000"  # Webhook API
+    volumes:
+      # Persist database and logs
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    networks:
+      - summarybot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: summarybot-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - summarybot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: PostgreSQL Database (uncomment to use instead of SQLite)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: summarybot-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_DB=summarybot
+  #     - POSTGRES_USER=${POSTGRES_USER:-summarybot}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - summarybot-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U summarybot"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  redis-data:
+    driver: local
+  # postgres-data:
+  #   driver: local
+
+networks:
+  summarybot-network:
+    driver: bridge

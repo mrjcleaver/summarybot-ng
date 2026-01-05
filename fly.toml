@@ -1,0 +1,68 @@
+# Fly.io Configuration for Summary Bot NG
+app = "summarybot-ng"
+primary_region = "sea"  # Seattle
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[experimental]
+  auto_rollback = true
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LLM_ROUTE = "openrouter"
+  OPENROUTER_MODEL = "anthropic/claude-3.5-sonnet"
+  CACHE_BACKEND = "redis"
+  WEBHOOK_ENABLED = "true"
+  WEBHOOK_HOST = "0.0.0.0"
+  WEBHOOK_PORT = "5000"
+  LOG_LEVEL = "INFO"
+  DATABASE_URL = "sqlite:///data/summarybot.db"
+
+# HTTP service (Webhook API)
+[[services]]
+  protocol = "tcp"
+  internal_port = 5000
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "30s"
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+
+# Persistent volume for database
+[mounts]
+  source = "summarybot_data"
+  destination = "/app/data"
+  initial_size = "1GB"
+
+# Resource limits
+[deploy]
+  strategy = "rolling"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

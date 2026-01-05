@@ -1,0 +1,82 @@
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Development files
+.env
+.env.*
+!.env.example
+*.log
+summarybot.log
+
+# Data and temporary files
+data/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Claude and development
+.claude/
+.claude-flow/
+.clasp/
+dev-context.sh
+scripts/
+
+# Architecture and planning docs
+architecture/
+examples/
+*.md
+!README.md
+
+# Misc
+.coverage
+.mypy_cache/
+.dmypy.json
+dmypy.json
