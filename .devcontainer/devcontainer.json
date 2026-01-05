@@ -10,6 +10,7 @@
     "ghcr.io/EliiseS/devcontainer-features/bash-profile:1": {
       "command": "alias cfa='npx claude-flow@alpha' && alias dsp='claude --dangerously-skip-permissions'"
     },
+    "ghcr.io/gmkonan/fly-cli-feature/flyctl:1": {},
     "ghcr.io/itsmechlark/features/1password:1.5.0": {}
   },
 
