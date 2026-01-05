@@ -1,0 +1,198 @@
+# Alert Configuration for Summary Bot NG
+# Defines thresholds and notification channels for monitoring alerts
+
+version: "1.0"
+
+# Alert Thresholds
+thresholds:
+  # CPU usage threshold (percentage)
+  cpu_usage:
+    warning: 70
+    critical: 85
+    duration_seconds: 300  # Alert if sustained for 5 minutes
+
+  # Memory usage threshold (percentage)
+  memory_usage:
+    warning: 75
+    critical: 90
+    duration_seconds: 300
+
+  # Response time threshold (milliseconds)
+  response_time:
+    warning: 2000
+    critical: 5000
+    samples: 5  # Alert if 5 consecutive slow responses
+
+  # Error rate threshold (errors per minute)
+  error_rate:
+    warning: 5
+    critical: 20
+    window_minutes: 5
+
+  # Log file size (MB)
+  log_size:
+    warning: 100
+    critical: 500
+
+  # Process health
+  process_down:
+    check_interval_seconds: 30
+    max_restarts_per_hour: 3
+
+  # API availability
+  api_health:
+    check_interval_seconds: 60
+    max_failures: 3
+    timeout_seconds: 10
+
+# Notification Channels
+notifications:
+  # Discord webhook for alerts
+  discord:
+    enabled: false
+    webhook_url: "${DISCORD_ALERT_WEBHOOK_URL}"
+    alert_levels: ["warning", "critical"]
+    rate_limit_minutes: 15
+
+  # Email notifications
+  email:
+    enabled: false
+    smtp_host: "${SMTP_HOST}"
+    smtp_port: 587
+    from_address: "alerts@summarybot.local"
+    to_addresses:
+      - "admin@example.com"
+    alert_levels: ["critical"]
+
+  # Slack webhook
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#summarybot-alerts"
+    alert_levels: ["warning", "critical"]
+
+  # PagerDuty integration
+  pagerduty:
+    enabled: false
+    routing_key: "${PAGERDUTY_ROUTING_KEY}"
+    alert_levels: ["critical"]
+
+  # Log file alerts (always enabled)
+  log:
+    enabled: true
+    file_path: "./logs/alerts.log"
+    alert_levels: ["info", "warning", "critical"]
+
+# Monitoring Schedules
+schedules:
+  # Health check frequency
+  health_check:
+    interval_seconds: 60
+    enabled: true
+
+  # Performance metrics collection
+  performance_metrics:
+    interval_seconds: 300  # 5 minutes
+    enabled: true
+
+  # Log rotation check
+  log_rotation:
+    interval_seconds: 3600  # 1 hour
+    enabled: true
+
+  # Disk space check
+  disk_space:
+    interval_seconds: 3600
+    threshold_gb: 5
+    enabled: true
+
+# Alert Rules
+rules:
+  - name: "bot_process_down"
+    condition: "process_not_running"
+    severity: "critical"
+    message: "Discord bot process is not running"
+    action: "restart"
+
+  - name: "high_cpu_usage"
+    condition: "cpu > thresholds.cpu_usage.critical"
+    severity: "critical"
+    message: "Critical CPU usage: {cpu}%"
+    action: "investigate"
+
+  - name: "high_memory_usage"
+    condition: "memory > thresholds.memory_usage.critical"
+    severity: "critical"
+    message: "Critical memory usage: {memory}%"
+    action: "investigate"
+
+  - name: "api_health_failure"
+    condition: "health_check_failed"
+    severity: "critical"
+    message: "Webhook API health check failed"
+    action: "restart"
+
+  - name: "high_error_rate"
+    condition: "error_rate > thresholds.error_rate.critical"
+    severity: "critical"
+    message: "High error rate detected: {error_rate} errors/min"
+    action: "investigate"
+
+  - name: "slow_response_time"
+    condition: "response_time > thresholds.response_time.critical"
+    severity: "warning"
+    message: "Slow API response time: {response_time}ms"
+    action: "monitor"
+
+  - name: "log_file_size"
+    condition: "log_size > thresholds.log_size.warning"
+    severity: "warning"
+    message: "Log file size: {log_size}MB"
+    action: "rotate_logs"
+
+  - name: "discord_gateway_disconnected"
+    condition: "no_gateway_heartbeat_for_60s"
+    severity: "critical"
+    message: "Discord gateway connection lost"
+    action: "restart"
+
+  - name: "openrouter_api_errors"
+    condition: "openrouter_errors > 5"
+    severity: "warning"
+    message: "Multiple OpenRouter API errors detected"
+    action: "check_api_key"
+
+# Auto-remediation Actions
+actions:
+  restart:
+    enabled: true
+    max_attempts: 3
+    backoff_seconds: 60
+    script: "./scripts/monitoring/restart-bot.sh"
+
+  rotate_logs:
+    enabled: true
+    script: "./scripts/monitoring/rotate-logs.sh"
+    keep_files: 10
+
+  investigate:
+    enabled: true
+    script: "./scripts/monitoring/collect-diagnostics.sh"
+
+  monitor:
+    enabled: true
+    duration_seconds: 300
+
+# Retention Policies
+retention:
+  metrics:
+    duration_days: 30
+    path: "./metrics"
+
+  logs:
+    duration_days: 14
+    path: "./logs"
+
+  alerts:
+    duration_days: 90
+    path: "./logs/alerts.log"

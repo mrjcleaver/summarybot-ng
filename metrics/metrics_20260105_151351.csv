@@ -1,0 +1,7 @@
+timestamp,bot_pid,cpu_percent,mem_percent,rss_mb,vsz_mb,threads,open_files,api_requests,errors,warnings
+2026-01-05 15:13:51,30042,0.0,0.0,1,6,1,12,4,0
+0,1
+2026-01-05 15:14:02,30042,0.0,0.0,1,6,1,12,4,0
+0,1
+2026-01-05 15:14:12,30042,0.0,0.0,1,6,1,12,4,0
+0,1
