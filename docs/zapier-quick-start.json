@@ -1,0 +1,66 @@
+{
+  "zapier_webhook_config": {
+    "method": "POST",
+    "url": "https://summarybot-ng.fly.dev/api/v1/summaries",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-API-Key": "test-api-key-12345"
+    },
+    "payload_type": "json"
+  },
+  "simple_payload_example": {
+    "messages": [
+      {
+        "id": "msg-001",
+        "author_name": "User Name",
+        "author_id": "123456789",
+        "content": "Your message content here",
+        "timestamp": "2026-01-06T10:00:00"
+      }
+    ],
+    "channel_id": "your-channel-id",
+    "guild_id": "your-guild-id"
+  },
+  "full_payload_example": {
+    "messages": [
+      {
+        "id": "msg-001",
+        "author_name": "Alice",
+        "author_id": "111111",
+        "content": "First message",
+        "timestamp": "2026-01-06T10:00:00"
+      },
+      {
+        "id": "msg-002",
+        "author_name": "Bob",
+        "author_id": "222222",
+        "content": "Second message",
+        "timestamp": "2026-01-06T10:01:00"
+      }
+    ],
+    "channel_id": "zapier-channel",
+    "guild_id": "zapier-guild",
+    "options": {
+      "summary_length": "brief",
+      "include_bots": false,
+      "min_messages": 2
+    }
+  },
+  "response_example": {
+    "id": "sum_1767657814",
+    "channel_id": "zapier-channel",
+    "guild_id": "zapier-guild",
+    "summary_text": "Summary of the conversation...",
+    "key_points": [
+      "Key point 1",
+      "Key point 2"
+    ],
+    "action_items": [],
+    "message_count": 2,
+    "metadata": {
+      "input_tokens": 488,
+      "output_tokens": 293,
+      "total_tokens": 781
+    }
+  }
+}

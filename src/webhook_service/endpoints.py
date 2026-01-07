@@ -83,11 +83,60 @@ def create_summary_router(
         try:
             logger.info(f"Processing summary request {request_id}")
 
+            # Handle Zapier's payload wrapping - Zapier sends JSON as a string in a "payload" key
+            import json
+            if "payload" in request and isinstance(request.get("payload"), str):
+                logger.info("Unwrapping Zapier payload string")
+                try:
+                    request = json.loads(request["payload"])
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Zapier payload: {e}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "INVALID_REQUEST",
+                            "message": "Invalid JSON in payload field",
+                            "request_id": request_id
+                        }
+                    )
+
             # Extract request parameters
             messages = request.get("messages", [])
             channel_id = request.get("channel_id")
             guild_id = request.get("guild_id")
             options_dict = request.get("options", {})
+
+            # Zapier may send messages/options as JSON strings - parse them
+            if isinstance(messages, str):
+                logger.info(f"Parsing messages from JSON string. First 200 chars: {messages[:200]}")
+                try:
+                    messages = json.loads(messages)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse messages JSON: {e}")
+                    logger.error(f"Malformed messages string: {messages}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "INVALID_REQUEST",
+                            "message": "Invalid JSON in messages field",
+                            "request_id": request_id
+                        }
+                    )
+
+            if isinstance(options_dict, str):
+                logger.info("Parsing options from JSON string")
+                try:
+                    options_dict = json.loads(options_dict)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse options JSON: {e}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error": "INVALID_REQUEST",
+                            "message": "Invalid JSON in options field",
+                            "request_id": request_id
+                        }
+                    )
 
             if not messages:
                 raise HTTPException(
@@ -195,6 +244,10 @@ def create_summary_router(
                 }
             )
 
+        except HTTPException:
+            # Re-raise HTTPException without modification
+            raise
+
         except Exception as e:
             logger.error(f"Unexpected error in create_summary: {e}", exc_info=True)
             raise HTTPException(
@@ -291,6 +344,10 @@ def create_summary_router(
                     "request_id": request_id
                 }
             )
+
+        except HTTPException:
+            # Re-raise HTTPException without modification
+            raise
 
         except Exception as e:
             logger.error(f"Unexpected error in create_summary: {e}", exc_info=True)
@@ -403,6 +460,10 @@ def create_summary_router(
                     "request_id": request_id
                 }
             )
+
+        except HTTPException:
+            # Re-raise HTTPException without modification
+            raise
 
         except Exception as e:
             logger.error(f"Error scheduling summary: {e}", exc_info=True)

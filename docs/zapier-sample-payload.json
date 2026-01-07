@@ -1,0 +1,51 @@
+{
+  "messages": [
+    {
+      "id": "msg-001",
+      "author_name": "Alice",
+      "author_id": "111111",
+      "content": "Hey team, I've been working on the new Discord bot feature for summarization.",
+      "timestamp": "2026-01-07T14:00:00"
+    },
+    {
+      "id": "msg-002",
+      "author_name": "Bob",
+      "author_id": "222222",
+      "content": "That sounds interesting! What does it do exactly?",
+      "timestamp": "2026-01-07T14:01:00"
+    },
+    {
+      "id": "msg-003",
+      "author_name": "Alice",
+      "author_id": "111111",
+      "content": "It adds a webhook API so we can trigger summarizations from external services like Zapier.",
+      "timestamp": "2026-01-07T14:02:00"
+    },
+    {
+      "id": "msg-004",
+      "author_name": "Carol",
+      "author_id": "333333",
+      "content": "That's really useful! We could automate daily digests of our Discord channels.",
+      "timestamp": "2026-01-07T14:03:00"
+    },
+    {
+      "id": "msg-005",
+      "author_name": "Bob",
+      "author_id": "222222",
+      "content": "Can we integrate it with our existing workflow automation?",
+      "timestamp": "2026-01-07T14:04:00"
+    },
+    {
+      "id": "msg-006",
+      "author_name": "Alice",
+      "author_id": "111111",
+      "content": "Absolutely! The API accepts standard JSON payloads with authentication via API keys.",
+      "timestamp": "2026-01-07T14:05:00"
+    }
+  ],
+  "channel_id": "zapier-channel",
+  "guild_id": "zapier-guild",
+  "options": {
+    "summary_length": "brief"
+  }
+}
