@@ -39,6 +39,12 @@ class ConfigManager:
         # Validate the final configuration
         errors = ConfigValidator.validate_config(config)
         if errors:
+            # Log validation errors for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Configuration validation failed with {len(errors)} errors:")
+            for i, error in enumerate(errors, 1):
+                logger.error(f"  {i}. {error}")
             raise ValidationError("Configuration validation failed", errors)
         
         self._config = config
