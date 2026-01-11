@@ -47,10 +47,17 @@ class EventHandler:
         # Set bot status
         await self._update_presence()
 
-        # Sync commands
+        # Sync commands for all guilds (guild-specific sync is instant)
         try:
-            await self.bot.sync_commands()
-            logger.info("Successfully synced slash commands")
+            # Sync to each guild individually for instant availability
+            for guild in self.bot.client.guilds:
+                try:
+                    await self.bot.sync_commands(guild_id=str(guild.id))
+                    logger.info(f"Synced commands for guild: {guild.name} (ID: {guild.id})")
+                except Exception as e:
+                    logger.error(f"Failed to sync commands for guild {guild.id}: {e}")
+
+            logger.info("Successfully synced slash commands to all guilds")
         except Exception as e:
             logger.error(f"Failed to sync commands: {e}", exc_info=True)
 
