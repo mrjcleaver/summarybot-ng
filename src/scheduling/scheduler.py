@@ -321,6 +321,26 @@ class TaskScheduler:
                 timezone=self.timezone
             )
 
+        elif task.schedule_type == ScheduleType.HALF_WEEKLY:
+            # Half-weekly: specific days of the week (like weekly but with custom days)
+            if not task.schedule_days:
+                raise ValueError("Half-weekly schedule requires schedule_days to be specified")
+
+            if task.schedule_time:
+                hour, minute = map(int, task.schedule_time.split(':'))
+            else:
+                hour, minute = 0, 0
+
+            # Convert schedule_days to day_of_week string
+            day_of_week = ','.join([str(d) for d in sorted(task.schedule_days)])
+
+            return CronTrigger(
+                day_of_week=day_of_week,
+                hour=hour,
+                minute=minute,
+                timezone=self.timezone
+            )
+
         elif task.schedule_type == ScheduleType.MONTHLY:
             # Monthly execution
             if task.schedule_time:

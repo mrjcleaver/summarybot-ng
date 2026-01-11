@@ -34,6 +34,7 @@ class ScheduleType(Enum):
     ONCE = "once"
     DAILY = "daily"
     WEEKLY = "weekly"
+    HALF_WEEKLY = "half-weekly"  # Specific days of the week
     MONTHLY = "monthly"
     CUSTOM = "custom"
 
@@ -238,7 +239,16 @@ class ScheduledTask(BaseModel):
                 days = "Weekly"
             time_part = f" at {self.schedule_time}" if self.schedule_time else ""
             return f"{days}{time_part}"
-        
+
+        if self.schedule_type == ScheduleType.HALF_WEEKLY:
+            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            if self.schedule_days:
+                days = ", ".join([day_names[d] for d in sorted(self.schedule_days)])
+                time_part = f" at {self.schedule_time}" if self.schedule_time else ""
+                return f"{days}{time_part}"
+            else:
+                return "Half-weekly (days not specified)"
+
         if self.schedule_type == ScheduleType.MONTHLY:
             day_part = f" on day {self.created_at.day}"
             time_part = f" at {self.schedule_time}" if self.schedule_time else ""

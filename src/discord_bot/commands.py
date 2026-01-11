@@ -111,16 +111,18 @@ class CommandRegistry:
         )
         @discord.app_commands.describe(
             channel="Channel to summarize",
-            frequency="How often to generate summaries (daily, weekly, monthly)",
+            frequency="How often to generate summaries (daily, weekly, half-weekly, monthly)",
             time="Time to generate summary (HH:MM format, UTC)",
-            length="Summary length (brief, detailed, comprehensive)"
+            length="Summary length (brief, detailed, comprehensive)",
+            days="Days for half-weekly schedule (e.g., 'mon,wed,fri' or 'tue,thu,sat')"
         )
         async def schedule_create_command(
             interaction: discord.Interaction,
             channel: discord.TextChannel,
             frequency: str,
             time: Optional[str] = None,
-            length: str = "detailed"
+            length: str = "detailed",
+            days: Optional[str] = None
         ):
             """Create a scheduled summary."""
             handler = self.bot.services.get('schedule_handler')
@@ -136,7 +138,8 @@ class CommandRegistry:
                 channel=channel,
                 frequency=frequency,
                 time_of_day=time,
-                length=length
+                length=length,
+                days=days
             )
 
         @schedule_group.command(

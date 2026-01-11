@@ -3,17 +3,50 @@ Scheduling command handlers for automated summaries.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, time
 import discord
 
 from .base import BaseCommandHandler
 from .utils import format_error_response, format_success_response, format_info_response
 from ..exceptions import UserError, create_error_context
-from ..models.task import ScheduledTask, TaskType, TaskStatus
-from ..models.summary import SummaryLength
+from ..models.task import ScheduledTask, TaskType, TaskStatus, ScheduleType, Destination, DestinationType
+from ..models.summary import SummaryLength, SummaryOptions
 
 logger = logging.getLogger(__name__)
+
+
+def parse_day_names(day_string: str) -> List[int]:
+    """
+    Parse day names from comma-separated string to weekday integers.
+
+    Args:
+        day_string: Comma-separated day names (e.g., "mon,wed,fri,sun")
+
+    Returns:
+        List of weekday integers (0=Monday, 6=Sunday)
+
+    Raises:
+        ValueError: If invalid day name provided
+    """
+    day_map = {
+        'mon': 0, 'monday': 0,
+        'tue': 1, 'tuesday': 1,
+        'wed': 2, 'wednesday': 2,
+        'thu': 3, 'thursday': 3,
+        'fri': 4, 'friday': 4,
+        'sat': 5, 'saturday': 5,
+        'sun': 6, 'sunday': 6
+    }
+
+    days = []
+    for day_name in day_string.lower().split(','):
+        day_name = day_name.strip()
+        if day_name not in day_map:
+            raise ValueError(f"Invalid day name: {day_name}")
+        days.append(day_map[day_name])
+
+    return sorted(list(set(days)))  # Remove duplicates and sort
 
 
 class ScheduleCommandHandler(BaseCommandHandler):
@@ -63,16 +96,18 @@ class ScheduleCommandHandler(BaseCommandHandler):
                                     channel: discord.TextChannel,
                                     frequency: str,
                                     time_of_day: Optional[str] = None,
-                                    length: str = "detailed") -> None:
+                                    length: str = "detailed",
+                                    days: Optional[str] = None) -> None:
         """
         Create a new scheduled summary.
 
         Args:
             interaction: Discord interaction object
             channel: Target channel for summaries
-            frequency: Schedule frequency (daily, weekly, custom)
+            frequency: Schedule frequency (daily, weekly, half-weekly, monthly)
             time_of_day: Time to generate summary (HH:MM format)
             length: Summary length
+            days: Specific days for half-weekly (e.g., "mon,wed,fri,sun")
         """
         try:
             # Check admin permission
@@ -88,7 +123,7 @@ class ScheduleCommandHandler(BaseCommandHandler):
                 )
 
             # Validate frequency
-            valid_frequencies = ["hourly", "daily", "weekly", "monthly"]
+            valid_frequencies = ["hourly", "daily", "weekly", "half-weekly", "monthly"]
             if frequency.lower() not in valid_frequencies:
                 raise UserError(
                     message=f"Invalid frequency: {frequency}",
@@ -119,19 +154,58 @@ class ScheduleCommandHandler(BaseCommandHandler):
                     user_message="Length must be 'brief', 'detailed', or 'comprehensive'."
                 )
 
+            # Parse days for half-weekly scheduling
+            schedule_days = []
+            if frequency.lower() == "half-weekly":
+                if not days:
+                    raise UserError(
+                        message="Days required for half-weekly schedule",
+                        error_code="MISSING_DAYS",
+                        user_message="Please specify days for half-weekly schedule (e.g., 'mon,wed,fri' or 'tue,thu')"
+                    )
+                try:
+                    schedule_days = parse_day_names(days)
+                except ValueError as e:
+                    raise UserError(
+                        message=str(e),
+                        error_code="INVALID_DAYS",
+                        user_message=f"Invalid day specification: {str(e)}. Use format like 'mon,wed,fri' or 'tue,thu,sat'"
+                    )
+
+            # Map frequency to ScheduleType
+            frequency_map = {
+                "daily": ScheduleType.DAILY,
+                "weekly": ScheduleType.WEEKLY,
+                "half-weekly": ScheduleType.HALF_WEEKLY,
+                "monthly": ScheduleType.MONTHLY,
+                "hourly": ScheduleType.CUSTOM  # hourly uses custom cron
+            }
+            schedule_type = frequency_map.get(frequency.lower(), ScheduleType.DAILY)
+
+            # Create destination
+            destination = Destination(
+                type=DestinationType.DISCORD_CHANNEL,
+                target=str(channel.id),
+                format="embed",
+                enabled=True
+            )
+
+            # Create summary options
+            summary_opts = SummaryOptions(summary_length=summary_length)
+
             # Create scheduled task
             task = ScheduledTask(
+                name=f"{frequency.capitalize()} summary for #{channel.name}",
                 guild_id=str(interaction.guild_id),
                 channel_id=str(channel.id),
                 task_type=TaskType.SUMMARY,
-                frequency=frequency.lower(),
-                schedule_time=schedule_time,
-                enabled=True,
-                metadata={
-                    "summary_length": summary_length.value,
-                    "created_by": str(interaction.user.id),
-                    "channel_name": channel.name
-                }
+                schedule_type=schedule_type,
+                schedule_time=schedule_time.strftime('%H:%M') if schedule_time else None,
+                schedule_days=schedule_days,
+                destinations=[destination],
+                summary_options=summary_opts,
+                is_active=True,
+                created_by=str(interaction.user.id)
             )
 
             # Schedule the task
@@ -139,6 +213,10 @@ class ScheduleCommandHandler(BaseCommandHandler):
 
             # Create success response
             schedule_desc = f"{frequency.capitalize()}"
+            if schedule_days:
+                day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                days_str = ", ".join([day_names[d] for d in schedule_days])
+                schedule_desc = f"{days_str}"
             if schedule_time:
                 schedule_desc += f" at {schedule_time.strftime('%H:%M')} UTC"
 
