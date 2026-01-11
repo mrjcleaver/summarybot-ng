@@ -245,6 +245,8 @@ class SummaryBotApp:
             message_cleaner=None
         )
 
+        # Note: schedule_handler will be created after task_scheduler initialization
+
         # Add command handler to bot services
         if not self.discord_bot.services:
             self.discord_bot.services = {}
@@ -271,7 +273,13 @@ class SummaryBotApp:
             task_executor=task_executor
         )
 
-        # TODO: ScheduleCommandHandler needs to be integrated into CommandRegistry
+        # Initialize schedule command handler and add to bot services
+        schedule_handler = ScheduleCommandHandler(
+            summarization_engine=self.summarization_engine,
+            permission_manager=self.permission_manager,
+            task_scheduler=self.task_scheduler
+        )
+        self.discord_bot.services['schedule_handler'] = schedule_handler
 
         # Start scheduler
         await self.task_scheduler.start()

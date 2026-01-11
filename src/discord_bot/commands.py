@@ -83,6 +83,131 @@ class CommandRegistry:
                 except:
                     pass
 
+        # Register /schedule command group
+        schedule_group = discord.app_commands.Group(
+            name="schedule",
+            description="Manage scheduled summaries"
+        )
+
+        @schedule_group.command(
+            name="list",
+            description="List all scheduled summaries for this server"
+        )
+        async def schedule_list_command(interaction: discord.Interaction):
+            """List scheduled summaries."""
+            handler = self.bot.services.get('schedule_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Scheduling feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_schedule_list(interaction)
+
+        @schedule_group.command(
+            name="create",
+            description="Create a new scheduled summary"
+        )
+        @discord.app_commands.describe(
+            channel="Channel to summarize",
+            frequency="How often to generate summaries (daily, weekly, monthly)",
+            time="Time to generate summary (HH:MM format, UTC)",
+            length="Summary length (brief, detailed, comprehensive)"
+        )
+        async def schedule_create_command(
+            interaction: discord.Interaction,
+            channel: discord.TextChannel,
+            frequency: str,
+            time: Optional[str] = None,
+            length: str = "detailed"
+        ):
+            """Create a scheduled summary."""
+            handler = self.bot.services.get('schedule_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Scheduling feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_schedule_create(
+                interaction,
+                channel=channel,
+                frequency=frequency,
+                time_of_day=time,
+                length=length
+            )
+
+        @schedule_group.command(
+            name="delete",
+            description="Delete a scheduled summary"
+        )
+        @discord.app_commands.describe(
+            task_id="ID of the scheduled task to delete"
+        )
+        async def schedule_delete_command(
+            interaction: discord.Interaction,
+            task_id: str
+        ):
+            """Delete a scheduled summary."""
+            handler = self.bot.services.get('schedule_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Scheduling feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_schedule_delete(interaction, task_id=task_id)
+
+        @schedule_group.command(
+            name="pause",
+            description="Pause a scheduled summary"
+        )
+        @discord.app_commands.describe(
+            task_id="ID of the scheduled task to pause"
+        )
+        async def schedule_pause_command(
+            interaction: discord.Interaction,
+            task_id: str
+        ):
+            """Pause a scheduled summary."""
+            handler = self.bot.services.get('schedule_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Scheduling feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_schedule_pause(interaction, task_id=task_id)
+
+        @schedule_group.command(
+            name="resume",
+            description="Resume a paused scheduled summary"
+        )
+        @discord.app_commands.describe(
+            task_id="ID of the scheduled task to resume"
+        )
+        async def schedule_resume_command(
+            interaction: discord.Interaction,
+            task_id: str
+        ):
+            """Resume a scheduled summary."""
+            handler = self.bot.services.get('schedule_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Scheduling feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_schedule_resume(interaction, task_id=task_id)
+
+        # Add the schedule command group to the tree
+        self.tree.add_command(schedule_group)
+
         # Register help command
         @self.tree.command(
             name="help",
@@ -99,6 +224,12 @@ class CommandRegistry:
             embed.add_field(
                 name="/summarize",
                 value="Create a summary of recent channel messages",
+                inline=False
+            )
+
+            embed.add_field(
+                name="/schedule",
+                value="Manage scheduled summaries (list, create, delete, pause, resume)",
                 inline=False
             )
 
