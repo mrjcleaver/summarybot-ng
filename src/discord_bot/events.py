@@ -52,6 +52,11 @@ class EventHandler:
             # Sync to each guild individually for instant availability
             for guild in self.bot.client.guilds:
                 try:
+                    # Copy global commands to guild tree
+                    guild_obj = discord.Object(id=guild.id)
+                    self.bot.client.tree.copy_global_to(guild=guild_obj)
+
+                    # Sync guild commands
                     await self.bot.sync_commands(guild_id=str(guild.id))
                     logger.info(f"Synced commands for guild: {guild.name} (ID: {guild.id})")
                 except Exception as e:
@@ -110,6 +115,11 @@ class EventHandler:
 
         # Sync commands for this guild
         try:
+            # Copy global commands to this guild
+            guild_obj = discord.Object(id=guild.id)
+            self.bot.client.tree.copy_global_to(guild=guild_obj)
+
+            # Sync guild commands
             await self.bot.sync_commands(guild_id=str(guild.id))
             logger.info(f"Synced commands for guild {guild.id}")
         except Exception as e:

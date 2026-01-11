@@ -16,11 +16,12 @@ import os
 import logging
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-from config import ConfigManager
-from discord_bot import SummaryBot
+from src.config import ConfigManager
+from src.discord_bot import SummaryBot
 
 logging.basicConfig(
     level=logging.INFO,
