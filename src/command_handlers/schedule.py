@@ -290,18 +290,19 @@ class ScheduleCommandHandler(BaseCommandHandler):
                 channel = interaction.guild.get_channel(int(task.channel_id))
                 channel_name = channel.mention if channel else f"Channel {task.channel_id}"
 
-                schedule_desc = task.frequency.capitalize()
-                if task.schedule_time:
-                    schedule_desc += f" at {task.schedule_time.strftime('%H:%M')} UTC"
+                # Use the built-in schedule description method
+                schedule_desc = task.get_schedule_description()
 
-                status_emoji = "✅" if task.enabled else "⏸️"
-                length = task.metadata.get("summary_length", "detailed")
+                status_emoji = "✅" if task.is_active else "⏸️"
+
+                # Get summary length from summary_options
+                length = task.summary_options.summary_length.value if task.summary_options else "detailed"
 
                 field_value = (
-                    f"{status_emoji} **Status:** {'Active' if task.enabled else 'Paused'}\n"
+                    f"{status_emoji} **Status:** {'Active' if task.is_active else 'Paused'}\n"
                     f"📝 **Channel:** {channel_name}\n"
                     f"🔄 **Schedule:** {schedule_desc}\n"
-                    f"📏 **Length:** {length}\n"
+                    f"📏 **Length:** {length.capitalize()}\n"
                     f"🆔 **ID:** `{task.id}`"
                 )
 
