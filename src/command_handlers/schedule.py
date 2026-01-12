@@ -295,8 +295,14 @@ class ScheduleCommandHandler(BaseCommandHandler):
 
                 status_emoji = "✅" if task.is_active else "⏸️"
 
-                # Get summary length from summary_options
-                length = task.summary_options.summary_length.value if task.summary_options else "detailed"
+                # Get summary length from summary_options (with fallback)
+                try:
+                    if task.summary_options and task.summary_options.summary_length:
+                        length = task.summary_options.summary_length.value
+                    else:
+                        length = "detailed"
+                except (AttributeError, ValueError):
+                    length = "detailed"
 
                 field_value = (
                     f"{status_emoji} **Status:** {'Active' if task.is_active else 'Paused'}\n"
