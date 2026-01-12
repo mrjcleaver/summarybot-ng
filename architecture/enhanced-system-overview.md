@@ -38,7 +38,7 @@ graph TB
         end
         
         subgraph "AI/ML Services"
-            LLM[LLM Gateway<br/>OpenAI, Anthropic, Local]
+            LLM[LLM Gateway<br/>Anthropic Claude, Local]
             EMS[Embedding Service<br/>Vector Generation]
             CLS[Classification Service<br/>Content Analysis]
         end
@@ -85,8 +85,7 @@ graph TB
     
     subgraph "External APIs"
         DISCORD_API[Discord API]
-        OPENAI_API[OpenAI API]
-        ANTHROPIC_API[Anthropic API]
+        CLAUDE_API[Claude API via OpenRouter]
         SLACK_API[Slack API]
         TEAMS_API[Microsoft Teams API]
     end
@@ -130,8 +129,7 @@ graph TB
     
     %% External API connections
     DS --> DISCORD_API
-    ASS --> OPENAI_API
-    ASS --> ANTHROPIC_API
+    ASS --> CLAUDE_API
     
     %% Storage connections
     DPS --> S3
@@ -245,8 +243,8 @@ class AIService:
     
     def __init__(self, config: AIConfig):
         self.providers = {
-            'openai': OpenAIProvider(config.openai),
             'anthropic': AnthropicProvider(config.anthropic),
+            'openrouter': OpenRouterProvider(config.openrouter),
             'local': LocalModelProvider(config.local)
         }
         self.model_router = ModelRouter(config.routing_rules)

@@ -47,7 +47,7 @@ graph TB
     
     subgraph "External APIs"
         DISCORD_API[Discord API]
-        OPENAI_API[OpenAI GPT-4 API]
+        CLAUDE_API[Claude API via OpenRouter]
     end
     
     subgraph "Infrastructure"
@@ -70,7 +70,7 @@ graph TB
     SS --> NS
     
     DS --> DISCORD_API
-    SS --> OPENAI_API
+    SS --> CLAUDE_API
     
     DS --> PDB
     WS --> PDB
@@ -127,13 +127,13 @@ class DiscordService:
 ```python
 # Responsibilities:
 # - Message preprocessing and filtering
-# - OpenAI API integration
+# - Claude API integration (via OpenRouter or direct)
 # - Summary generation and formatting
 # - Content caching
 
 class SummarizationService:
-    def __init__(self, openai_client: OpenAI, config: Config, cache: Cache):
-        self.openai_client = openai_client
+    def __init__(self, llm_client: LLMClient, config: Config, cache: Cache):
+        self.llm_client = llm_client
         self.config = config
         self.cache = cache
     
@@ -433,7 +433,7 @@ sequenceDiagram
     participant D as Discord Client
     participant DS as Discord Service
     participant SS as Summarization Service
-    participant OAI as OpenAI API
+    participant CLAUDE as Claude API
     participant DB as Database
     participant C as Cache
 
@@ -447,8 +447,8 @@ sequenceDiagram
         D-->>DS: Message data
         DS->>SS: Request summary
         SS->>SS: Preprocess messages
-        SS->>OAI: Generate summary
-        OAI-->>SS: Raw summary
+        SS->>CLAUDE: Generate summary
+        CLAUDE-->>SS: Raw summary
         SS->>SS: Format for Discord
         SS->>DB: Store summary
         SS->>C: Cache summary
@@ -471,7 +471,7 @@ sequenceDiagram
     participant SS as Summarization Service
     participant MQ as Message Queue
     participant WK as Worker Process
-    participant OAI as OpenAI API
+    participant CLAUDE as Claude API
     participant DB as Database
 
     EXT->>WS: POST /webhooks/summary
@@ -480,8 +480,8 @@ sequenceDiagram
     
     alt Sync Processing
         WS->>SS: Generate summary
-        SS->>OAI: API call
-        OAI-->>SS: Summary response
+        SS->>CLAUDE: API call
+        CLAUDE-->>SS: Summary response
         SS->>DB: Store result
         SS-->>WS: Formatted response
         WS-->>EXT: HTTP 200 + Summary
@@ -490,8 +490,8 @@ sequenceDiagram
         WS-->>EXT: HTTP 202 + Request ID
         MQ->>WK: Process job
         WK->>SS: Generate summary
-        SS->>OAI: API call
-        OAI-->>SS: Summary response
+        SS->>CLAUDE: API call
+        CLAUDE-->>SS: Summary response
         SS->>DB: Store result
         WK->>EXT: Webhook callback (if provided)
     end
@@ -544,24 +544,43 @@ class DiscordAPIClient(ExternalAPIClient):
             headers={"Authorization": f"Bot {self.config.token}"}
         )
 
-class OpenAIClient(ExternalAPIClient):
-    """OpenAI API integration with token management"""
-    
-    async def create_completion(self, messages: List[dict], model: str = "gpt-4") -> dict:
-        return await self.make_request(
-            "POST",
-            "/chat/completions",
-            json={
-                "model": model,
-                "messages": messages,
-                "max_tokens": 1000,
-                "temperature": 0.3
-            },
-            headers={
-                "Authorization": f"Bearer {self.config.api_key}",
-                "Content-Type": "application/json"
-            }
-        )
+class ClaudeClient(ExternalAPIClient):
+    """Claude API integration via OpenRouter or direct Anthropic API"""
+
+    async def create_completion(self, messages: List[dict], model: str = "anthropic/claude-3-sonnet-20240229") -> dict:
+        # OpenRouter format
+        if self.config.route == "openrouter":
+            return await self.make_request(
+                "POST",
+                "/chat/completions",
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": 1000,
+                    "temperature": 0.3
+                },
+                headers={
+                    "Authorization": f"Bearer {self.config.api_key}",
+                    "Content-Type": "application/json"
+                }
+            )
+        # Direct Anthropic API format
+        else:
+            return await self.make_request(
+                "POST",
+                "/v1/messages",
+                json={
+                    "model": model.replace("anthropic/", ""),
+                    "messages": messages,
+                    "max_tokens": 1000,
+                    "temperature": 0.3
+                },
+                headers={
+                    "x-api-key": self.config.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                }
+            )
 ```
 
 ### 5.2 Event-Driven Architecture
