@@ -4,17 +4,17 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://python.org)
 [![Discord](https://img.shields.io/badge/Discord-Bot-7289DA.svg)](https://discord.com)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991.svg)](https://openai.com)
+[![Claude](https://img.shields.io/badge/Claude-AI-5A67D8.svg)](https://anthropic.com)
 [![Poetry](https://img.shields.io/badge/Poetry-Dependency%20Management-blue.svg)](https://python-poetry.org)
 
 ## 🎯 Overview
 
-Summary Bot NG is an advanced Discord bot that transforms lengthy conversations into structured, actionable summaries. Using OpenAI's GPT-4, it intelligently filters content, preserves important context, and delivers clean, organized documentation perfect for teams, communities, and knowledge management.
+Summary Bot NG is an advanced Discord bot that transforms lengthy conversations into structured, actionable summaries. Using Anthropic's Claude AI (via OpenRouter in production), it intelligently filters content, preserves important context, and delivers clean, organized documentation perfect for teams, communities, and knowledge management.
 
 ## ✨ Key Features
 
 ### 🤖 AI-Powered Summarization
-- **GPT-4 Integration**: Leverages OpenAI's most advanced language model
+- **Claude AI Integration**: Leverages Anthropic's advanced language models via OpenRouter
 - **Smart Content Filtering**: Automatically removes noise and focuses on key points
 - **Structured Output**: Generates summaries with H2 headers and nested bullet points
 - **Context Preservation**: Maintains message links and important metadata
@@ -105,7 +105,7 @@ Notes:
 
 - **Language**: Python 3.8+
 - **Framework**: discord.py for Discord integration
-- **AI**: OpenAI GPT-4 API
+- **AI**: Anthropic Claude via OpenRouter (production) or direct Claude API (development)
 - **Dependencies**: Poetry for package management
 - **Configuration**: Environment variables and YAML config files
 - **Web Server**: FastAPI for webhook endpoints (default port 5000)

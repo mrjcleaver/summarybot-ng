@@ -13,7 +13,8 @@ Before installing Summary Bot NG, ensure you have:
 
 ### Required Accounts & Keys
 - **Discord Developer Account**: For creating the bot application
-- **OpenAI Account**: For GPT-4 API access
+- **Anthropic Account**: For Claude API access (development)
+- **OpenRouter Account**: For Claude API access via OpenRouter (production)
 
 ### System Requirements
 - **Memory**: Minimum 512MB RAM
@@ -66,9 +67,15 @@ nano .env  # or your preferred editor
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_GUILD_ID=your_server_id_here
 
-# OpenAI Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4
+# AI Configuration (Choose one based on environment)
+# Production (recommended): OpenRouter
+LLM_ROUTE=openrouter
+OPENROUTER_API_KEY=sk-or-v1-your_openrouter_key_here
+OPENROUTER_MODEL=anthropic/claude-3-sonnet-20240229
+
+# Development: Direct Claude API
+# LLM_ROUTE=anthropic
+# CLAUDE_API_KEY=sk-ant-your_claude_key_here
 
 # Bot Configuration
 BOT_PREFIX=/
@@ -105,13 +112,24 @@ Permission integer: `2147551296`
 4. Copy the generated URL and visit it
 5. Select your server and authorize
 
-### Step 4: OpenAI API Setup
-1. Visit https://platform.openai.com
+### Step 4: AI API Setup
+
+#### Option A: OpenRouter (Recommended for Production)
+1. Visit https://openrouter.ai
 2. Create account or log in
 3. Go to API Keys section
 4. Create new API key
-5. Copy key to `.env` file
-6. Ensure you have GPT-4 access and sufficient credits
+5. Copy key to `.env` file as `OPENROUTER_API_KEY`
+6. Set `LLM_ROUTE=openrouter` in `.env`
+7. Ensure you have sufficient credits
+
+#### Option B: Direct Claude API (Development)
+1. Visit https://console.anthropic.com
+2. Create account or log in
+3. Go to API Keys section
+4. Create new API key
+5. Copy key to `.env` file as `CLAUDE_API_KEY`
+6. Set `LLM_ROUTE=anthropic` in `.env`
 
 ## 🚀 Running the Bot
 
@@ -276,17 +294,20 @@ echo $DISCORD_BOT_TOKEN
 tail -f logs/summarybot.log
 ```
 
-#### OpenAI API Errors
+#### AI API Errors
 ```bash
-# Check API key
-echo $OPENAI_API_KEY
+# For OpenRouter
+echo $OPENROUTER_API_KEY
+curl https://openrouter.ai/api/v1/models \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY"
 
-# Test API connection
-curl https://api.openai.com/v1/models \
-  -H "Authorization: Bearer $OPENAI_API_KEY"
+# For Claude Direct
+echo $CLAUDE_API_KEY
+curl https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $CLAUDE_API_KEY" \
+  -H "anthropic-version: 2023-06-01"
 
-# Check API usage/limits
-# Visit https://platform.openai.com/usage
+# Check usage/limits at respective platform dashboards
 ```
 
 #### Permission Errors

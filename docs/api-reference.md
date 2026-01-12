@@ -156,7 +156,7 @@ Health check endpoint for monitoring.
   "uptime": 3600,
   "services": {
     "discord": "connected",
-    "openai": "available",
+    "claude_api": "available",
     "database": "connected"
   }
 }
@@ -274,8 +274,9 @@ Get current bot configuration.
     "max_message_count": 500,
     "default_prompt": "default"
   },
-  "openai": {
-    "model": "gpt-4",
+  "llm": {
+    "provider": "openrouter",
+    "model": "anthropic/claude-3-sonnet-20240229",
     "max_tokens": 4000,
     "temperature": 0.7
   },
@@ -297,7 +298,7 @@ Update bot configuration.
   "discord": {
     "max_message_count": 750
   },
-  "openai": {
+  "llm": {
     "temperature": 0.5
   }
 }
@@ -366,7 +367,7 @@ X-RateLimit-Reset: 1640995200
 - `INVALID_API_KEY` (401): Invalid or missing API key
 - `RATE_LIMITED` (429): Rate limit exceeded
 - `INVALID_CHANNEL` (404): Channel not found or inaccessible
-- `OPENAI_ERROR` (502): OpenAI API error
+- `LLM_API_ERROR` (502): Claude/OpenRouter API error
 - `INVALID_PARAMETERS` (400): Invalid request parameters
 - `INSUFFICIENT_PERMISSIONS` (403): Bot lacks required permissions
 

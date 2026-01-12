@@ -566,7 +566,7 @@ output_formats:
 ```yaml
 # config/performance.yaml
 performance:
-  openai:
+  llm:
     request_timeout: 60
     max_retries: 3
     backoff_factor: 2
