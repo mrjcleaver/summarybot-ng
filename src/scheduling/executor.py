@@ -17,6 +17,7 @@ from ..exceptions import (
     SummaryBotException, InsufficientContentError,
     MessageFetchError, create_error_context
 )
+from ..logging import CommandLogger, log_command, CommandType
 
 logger = logging.getLogger(__name__)
 
@@ -52,18 +53,22 @@ class TaskExecutor:
     def __init__(self,
                  summarization_engine,
                  message_processor,
-                 discord_client: Optional[discord.Client] = None):
+                 discord_client: Optional[discord.Client] = None,
+                 command_logger: Optional[CommandLogger] = None):
         """Initialize task executor.
 
         Args:
             summarization_engine: Summarization engine instance
             message_processor: Message processor instance
             discord_client: Optional Discord client for delivery
+            command_logger: CommandLogger instance for audit logging (optional)
         """
         self.summarization_engine = summarization_engine
         self.message_processor = message_processor
         self.discord_client = discord_client
+        self.command_logger = command_logger
 
+    @log_command(CommandType.SCHEDULED_TASK, command_name="execute_summary_task")
     async def execute_summary_task(self, task: SummaryTask) -> TaskExecutionResult:
         """Execute a summary task.
 
@@ -160,6 +165,7 @@ class TaskExecutor:
                 execution_time_seconds=execution_time
             )
 
+    @log_command(CommandType.SCHEDULED_TASK, command_name="execute_cleanup_task")
     async def execute_cleanup_task(self, task: CleanupTask) -> TaskExecutionResult:
         """Execute a cleanup task.
 
