@@ -49,6 +49,9 @@ class LogSanitizer:
         3. Redact or sanitize based on data type
         4. Recursively sanitize nested dictionaries
         """
+        if not parameters:
+            return {}
+
         if not self.config.sanitize_enabled:
             return parameters
 
@@ -91,7 +94,8 @@ class LogSanitizer:
         max_len = self.config.max_message_length
         if len(text) <= max_len:
             return text
-        return text[:max_len] + "... [truncated]"
+        # Reserve space for ellipsis
+        return text[:max_len - 3] + "..."
 
     def sanitize_error_message(self, error_message: str) -> str:
         """
@@ -101,6 +105,7 @@ class LogSanitizer:
         - File paths that might contain usernames
         - Connection strings
         - API endpoints with tokens
+        - API keys and tokens in text
         """
         if not error_message:
             return error_message
@@ -119,6 +124,21 @@ class LogSanitizer:
             sanitized
         )
 
+        # Redact API keys and tokens (sk-*, token patterns)
+        sanitized = re.sub(
+            r'\b(sk-[a-zA-Z0-9]{10,})',
+            '[REDACTED]',
+            sanitized
+        )
+
+        # Redact bearer tokens
+        sanitized = re.sub(
+            r'Bearer\s+[a-zA-Z0-9._-]+',
+            'Bearer [REDACTED]',
+            sanitized,
+            flags=re.IGNORECASE
+        )
+
         return self._truncate_string(sanitized)
 
     def hash_signature(self, signature: str) -> str:
@@ -134,10 +154,10 @@ class LogSanitizer:
         if not ip_address:
             return ""
 
-        # IPv4: 192.168.1.1 -> 192.168.*.**
+        # IPv4: 192.168.1.1 -> 192.168.*.*
         parts = ip_address.split('.')
         if len(parts) == 4:
-            return f"{parts[0]}.{parts[1]}.*.***"
+            return f"{parts[0]}.{parts[1]}.*.*"
 
         # IPv6: Mask last 64 bits
         if ':' in ip_address:
