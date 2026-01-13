@@ -179,9 +179,13 @@ class CommandLogRepository:
         query = "SELECT * FROM command_logs WHERE id = ?"
 
         try:
-            row = await self.connection.fetch_one(query, (log_id,))
+            cursor = await self.connection.execute(query, (log_id,))
+            row = await cursor.fetchone()
             if row:
-                return CommandLog.from_dict(dict(row))
+                # Convert row tuple to dict using column names
+                columns = [desc[0] for desc in cursor.description]
+                row_dict = dict(zip(columns, row))
+                return CommandLog.from_dict(row_dict)
             return None
         except Exception as e:
             logger.error(f"Failed to get command log {log_id}: {e}")
@@ -258,8 +262,11 @@ class CommandLogRepository:
         params.extend([limit, offset])
 
         try:
-            rows = await self.connection.fetch_all(query, tuple(params))
-            return [CommandLog.from_dict(dict(row)) for row in rows]
+            cursor = await self.connection.execute(query, tuple(params))
+            rows = await cursor.fetchall()
+            # Convert row tuples to dicts using column names
+            columns = [desc[0] for desc in cursor.description]
+            return [CommandLog.from_dict(dict(zip(columns, row))) for row in rows]
         except Exception as e:
             logger.error(f"Failed to find command logs: {e}")
             return []
@@ -319,8 +326,9 @@ class CommandLogRepository:
         query = f"SELECT COUNT(*) as count FROM command_logs WHERE {where_sql}"
 
         try:
-            row = await self.connection.fetch_one(query, tuple(params))
-            return row["count"] if row else 0
+            cursor = await self.connection.execute(query, tuple(params))
+            row = await cursor.fetchone()
+            return row[0] if row else 0
         except Exception as e:
             logger.error(f"Failed to count command logs: {e}")
             return 0
