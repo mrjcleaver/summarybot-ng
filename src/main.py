@@ -38,6 +38,8 @@ from .scheduling import TaskScheduler
 from .scheduling.executor import TaskExecutor
 from .webhook_service import WebhookServer
 from .data import initialize_repositories, run_migrations
+from .logging import CommandLogger, CommandLogRepository, LoggingConfig
+import aiosqlite
 
 
 class SummaryBotApp:
@@ -51,6 +53,7 @@ class SummaryBotApp:
         self.permission_manager: Optional[PermissionManager] = None
         self.task_scheduler: Optional[TaskScheduler] = None
         self.webhook_server: Optional[WebhookServer] = None
+        self.command_logger = None  # Command logging system
         self.running = False
 
         # Setup logging
@@ -122,7 +125,36 @@ class SummaryBotApp:
             pool_size=5
         )
 
+        # Initialize command logging
+        await self._initialize_command_logging(db_path)
+
         self.logger.info("Database initialized successfully")
+
+    async def _initialize_command_logging(self, db_path: str):
+        """Initialize command logging system."""
+        try:
+            self.logger.info("Initializing command logging system...")
+
+            # Create database connection for command logging
+            db_connection = await aiosqlite.connect(db_path)
+
+            # Create repository
+            repository = CommandLogRepository(db_connection)
+
+            # Create logger with configuration from environment
+            config = LoggingConfig.from_env()
+            self.command_logger = CommandLogger(repository, config)
+
+            # Start async processing if enabled
+            if config.async_writes:
+                await self.command_logger.start()
+
+            self.logger.info(f"Command logging initialized (enabled={config.enabled}, retention={config.retention_days} days)")
+
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize command logging: {e}")
+            self.logger.warning("Bot will continue without command logging")
+            self.command_logger = None
 
     def _select_llm_provider(self) -> Tuple[str, str, Optional[str], str]:
         """
@@ -242,7 +274,8 @@ class SummaryBotApp:
             permission_manager=self.permission_manager,
             message_fetcher=None,  # Will use direct Discord API calls
             message_filter=None,
-            message_cleaner=None
+            message_cleaner=None,
+            command_logger=self.command_logger  # Add command logging
         )
 
         # Note: schedule_handler will be created after task_scheduler initialization
@@ -265,7 +298,8 @@ class SummaryBotApp:
         task_executor = TaskExecutor(
             summarization_engine=self.summarization_engine,
             message_processor=self.message_processor,
-            discord_client=self.discord_bot.client
+            discord_client=self.discord_bot.client,
+            command_logger=self.command_logger  # Add command logging
         )
 
         # Create task scheduler
