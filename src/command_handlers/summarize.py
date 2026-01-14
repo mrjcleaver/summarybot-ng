@@ -34,7 +34,8 @@ class SummarizeCommandHandler(BaseCommandHandler):
     def __init__(self, summarization_engine, permission_manager=None,
                  message_fetcher: Optional[MessageFetcher] = None,
                  message_filter: Optional[MessageFilter] = None,
-                 message_cleaner: Optional[MessageCleaner] = None):
+                 message_cleaner: Optional[MessageCleaner] = None,
+                 command_logger=None):
         """
         Initialize summarize command handler.
 
@@ -44,8 +45,9 @@ class SummarizeCommandHandler(BaseCommandHandler):
             message_fetcher: MessageFetcher instance
             message_filter: MessageFilter instance
             message_cleaner: MessageCleaner instance
+            command_logger: CommandLogger instance for audit logging (optional)
         """
-        super().__init__(summarization_engine, permission_manager)
+        super().__init__(summarization_engine, permission_manager, command_logger=command_logger)
 
         self.message_fetcher = message_fetcher
         self.message_filter = message_filter
