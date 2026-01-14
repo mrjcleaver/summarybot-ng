@@ -13,6 +13,7 @@ from ..exceptions import (
     UserError,
     create_error_context
 )
+from ..logging import CommandLogger, log_command, CommandType
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,8 @@ class BaseCommandHandler(ABC):
     def __init__(self,
                  summarization_engine,
                  permission_manager=None,
-                 rate_limit_enabled: bool = True):
+                 rate_limit_enabled: bool = True,
+                 command_logger: Optional[CommandLogger] = None):
         """
         Initialize base command handler.
 
@@ -77,10 +79,12 @@ class BaseCommandHandler(ABC):
             summarization_engine: SummarizationEngine instance
             permission_manager: PermissionManager instance (optional)
             rate_limit_enabled: Whether to enable rate limiting
+            command_logger: CommandLogger instance for audit logging (optional)
         """
         self.summarization_engine = summarization_engine
         self.permission_manager = permission_manager
         self.rate_limit_enabled = rate_limit_enabled
+        self.command_logger = command_logger
         self.rate_limiter = RateLimitTracker()
         self._deferred_interactions: set = set()  # Track deferred interactions
 
@@ -88,6 +92,7 @@ class BaseCommandHandler(ABC):
         self.max_requests_per_minute = 5
         self.rate_limit_window = 60
 
+    @log_command(CommandType.SLASH_COMMAND)
     async def handle_command(self, interaction: discord.Interaction, **kwargs) -> None:
         """
         Main command handler with error handling and rate limiting.
