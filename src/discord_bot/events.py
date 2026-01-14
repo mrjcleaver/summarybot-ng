@@ -49,9 +49,21 @@ class EventHandler:
 
         # Sync commands for all guilds (guild-specific sync is instant)
         try:
-            # Sync to each guild individually for instant availability
+            # First, clear any existing guild commands to remove duplicates
             for guild in self.bot.client.guilds:
                 try:
+                    guild_obj = discord.Object(id=guild.id)
+                    self.bot.client.tree.clear_commands(guild=guild_obj)
+                    logger.info(f"Cleared old commands for guild: {guild.name}")
+                except Exception as e:
+                    logger.warning(f"Could not clear commands for guild {guild.id}: {e}")
+
+            # Copy global commands to each guild for instant availability
+            for guild in self.bot.client.guilds:
+                try:
+                    guild_obj = discord.Object(id=guild.id)
+                    self.bot.client.tree.copy_global_to(guild=guild_obj)
+
                     # Sync guild commands
                     await self.bot.sync_commands(guild_id=str(guild.id))
                     logger.info(f"Synced commands for guild: {guild.name} (ID: {guild.id})")
@@ -111,6 +123,13 @@ class EventHandler:
 
         # Sync commands for this guild
         try:
+            # Clear any existing guild commands
+            guild_obj = discord.Object(id=guild.id)
+            self.bot.client.tree.clear_commands(guild=guild_obj)
+
+            # Copy global commands to this guild
+            self.bot.client.tree.copy_global_to(guild=guild_obj)
+
             # Sync guild commands
             await self.bot.sync_commands(guild_id=str(guild.id))
             logger.info(f"Synced commands for guild {guild.id}")
