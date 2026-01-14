@@ -284,6 +284,16 @@ class EventHandler:
         except Exception as e:
             logger.error(f"Failed to update presence: {e}", exc_info=True)
 
+    async def on_interaction(self, interaction: discord.Interaction) -> None:
+        """
+        Handle ALL interactions for debugging.
+
+        Args:
+            interaction: The interaction that was received
+        """
+        logger.info(f"🔔 INTERACTION RECEIVED: type={interaction.type}, command={interaction.command.name if interaction.command else 'None'}, user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}")
+        # Don't actually process it, just log it
+
     def register_events(self) -> None:
         """Register all event handlers with the Discord client."""
         client = self.bot.client
@@ -292,6 +302,7 @@ class EventHandler:
         client.event(self.on_guild_join)
         client.event(self.on_guild_remove)
         client.event(self.on_error)
+        client.event(self.on_interaction)
 
         # Register command error handler
         client.tree.error(self.on_application_command_error)

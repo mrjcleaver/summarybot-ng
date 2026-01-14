@@ -52,6 +52,7 @@ class CommandRegistry:
             minutes: Optional[int] = None
         ):
             """Summarize recent channel messages."""
+            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, messages={messages}, hours={hours}, minutes={minutes}")
             # Defer response since summarization takes time
             await interaction.response.defer(ephemeral=False)
 
