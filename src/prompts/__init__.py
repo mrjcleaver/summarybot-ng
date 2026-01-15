@@ -15,6 +15,14 @@ from .cache import PromptCacheManager
 from .schema_validator import SchemaValidator
 from .path_parser import PATHFileParser
 from .fallback_chain import FallbackChainExecutor
+from .default_provider import DefaultPromptProvider
+from .models import (
+    PromptContext,
+    ResolvedPrompt,
+    PromptSource,
+    GuildPromptConfig,
+    ValidationResult,
+)
 
 __all__ = [
     "PromptTemplateResolver",
@@ -23,4 +31,10 @@ __all__ = [
     "SchemaValidator",
     "PATHFileParser",
     "FallbackChainExecutor",
+    "DefaultPromptProvider",
+    "PromptContext",
+    "ResolvedPrompt",
+    "PromptSource",
+    "GuildPromptConfig",
+    "ValidationResult",
 ]
