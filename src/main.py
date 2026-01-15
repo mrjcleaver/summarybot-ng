@@ -329,16 +329,22 @@ class SummaryBotApp:
         )
 
         # Initialize prompt config handler if prompt resolver is available
+        prompt_config_handler = None
         if self.prompt_resolver and self.guild_config_store:
-            from .command_handlers.prompt_config import PromptConfigCommandHandler
-            prompt_config_handler = PromptConfigCommandHandler(
-                config_store=self.guild_config_store,
-                resolver=self.prompt_resolver,
-                permission_manager=self.permission_manager,
-                command_logger=self.command_logger
-            )
+            try:
+                from .command_handlers.prompt_config import PromptConfigCommandHandler
+                prompt_config_handler = PromptConfigCommandHandler(
+                    config_store=self.guild_config_store,
+                    resolver=self.prompt_resolver,
+                    permission_manager=self.permission_manager,
+                    command_logger=self.command_logger
+                )
+                self.logger.info("✓ Prompt config handler created successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to create prompt config handler: {e}", exc_info=True)
+                prompt_config_handler = None
         else:
-            prompt_config_handler = None
+            self.logger.warning(f"Prompt config handler not created - prompt_resolver={self.prompt_resolver is not None}, guild_config_store={self.guild_config_store is not None}")
 
         # Note: schedule_handler will be created after task_scheduler initialization
 
