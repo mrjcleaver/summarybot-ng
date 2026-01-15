@@ -40,6 +40,7 @@ class PromptTemplateResolver:
 
     def __init__(
         self,
+        config_store=None,
         github_client: Optional[GitHubRepositoryClient] = None,
         cache_manager: Optional[PromptCacheManager] = None,
         path_parser: Optional[PATHFileParser] = None,
@@ -50,12 +51,16 @@ class PromptTemplateResolver:
         Initialize the prompt template resolver.
 
         Args:
+            config_store: Optional GuildPromptConfigStore for fetching guild configs
+
+        Args:
             github_client: GitHub client for fetching repos
             cache_manager: Cache manager for caching prompts
             path_parser: PATH file parser
             default_provider: Default prompt provider
             validator: Schema validator
         """
+        self.config_store = config_store
         self.validator = validator or SchemaValidator()
         self.github_client = github_client or GitHubRepositoryClient(validator=self.validator)
         self.cache_manager = cache_manager or PromptCacheManager()
@@ -85,6 +90,16 @@ class PromptTemplateResolver:
         Returns:
             ResolvedPrompt with content and metadata
         """
+        # Step 0: Fetch guild config if not provided and config_store available
+        if guild_config is None and self.config_store is not None:
+            try:
+                guild_config = await self.config_store.get_config(guild_id)
+                if guild_config:
+                    logger.debug(f"Fetched guild config for {guild_id} from config_store")
+            except Exception as e:
+                logger.warning(f"Failed to fetch guild config for {guild_id}: {e}")
+                guild_config = None
+
         # Step 1: Check cache for fresh prompt
         cached = await self.cache_manager.get(guild_id, context)
         if cached:
@@ -99,7 +114,7 @@ class PromptTemplateResolver:
         # Step 2: Check if guild has custom prompts enabled
         has_custom_prompts = (
             guild_config is not None
-            and guild_config.has_custom_prompts
+            and guild_config.enabled
         )
 
         if not has_custom_prompts:
