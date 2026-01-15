@@ -251,6 +251,8 @@ class SummaryBotApp:
 
         # Initialize prompt resolver for custom prompts
         prompt_resolver = None
+        guild_config_store = None
+
         try:
             from .prompts import PromptTemplateResolver, GuildPromptConfigStore
             from .data.sqlite import SQLiteConnection
@@ -258,6 +260,8 @@ class SummaryBotApp:
 
             # Get database path from config or use default
             db_path = self.config.database_config.url.replace('sqlite:///', '') if self.config.database_config else "data/summarybot.db"
+
+            self.logger.info(f"Initializing prompt system with database: {db_path}")
 
             # Initialize database connection
             db_connection = SQLiteConnection(db_path=db_path)
@@ -267,9 +271,11 @@ class SummaryBotApp:
             encryption_key = os.environ.get('PROMPT_TOKEN_ENCRYPTION_KEY')
             if encryption_key:
                 encryption_key = encryption_key.encode()
+                self.logger.info("Using PROMPT_TOKEN_ENCRYPTION_KEY from environment")
             else:
                 # Generate ephemeral key (tokens won't persist across restarts)
                 encryption_key = Fernet.generate_key()
+                self.logger.warning("No PROMPT_TOKEN_ENCRYPTION_KEY set - using ephemeral key (tokens won't persist)")
 
             # Initialize guild config store
             guild_config_store = GuildPromptConfigStore(
@@ -280,10 +286,11 @@ class SummaryBotApp:
             # Initialize prompt resolver
             prompt_resolver = PromptTemplateResolver(config_store=guild_config_store)
 
-            self.logger.info("Prompt resolver initialized for custom prompts")
+            self.logger.info("✓ Prompt resolver initialized successfully")
         except Exception as e:
-            self.logger.warning(f"Failed to initialize prompt resolver, using default prompts only: {e}")
+            self.logger.error(f"Failed to initialize prompt resolver: {e}", exc_info=True)
             prompt_resolver = None
+            guild_config_store = None
 
         # Initialize summarization engine with prompt resolver
         self.summarization_engine = SummarizationEngine(
@@ -292,9 +299,9 @@ class SummaryBotApp:
             prompt_resolver=prompt_resolver
         )
 
-        # Store prompt resolver for command handler
+        # Store prompt resolver and config store for command handler
         self.prompt_resolver = prompt_resolver
-        self.guild_config_store = guild_config_store if prompt_resolver else None
+        self.guild_config_store = guild_config_store
 
         self.logger.info("Core components initialized")
 
