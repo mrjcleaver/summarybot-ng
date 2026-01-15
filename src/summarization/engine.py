@@ -34,21 +34,24 @@ class CostEstimate:
 class SummarizationEngine:
     """Main engine for AI-powered summarization."""
     
-    def __init__(self, 
+    def __init__(self,
                  claude_client: ClaudeClient,
                  cache: Optional[SummaryCache] = None,
-                 max_prompt_tokens: int = 100000):
+                 max_prompt_tokens: int = 100000,
+                 prompt_resolver=None):
         """Initialize summarization engine.
-        
+
         Args:
             claude_client: Claude API client
             cache: Optional summary cache
             max_prompt_tokens: Maximum tokens allowed in prompt
+            prompt_resolver: Optional PromptTemplateResolver for custom prompts
         """
         self.claude_client = claude_client
         self.cache = cache
         self.max_prompt_tokens = max_prompt_tokens
-        
+        self.prompt_resolver = prompt_resolver
+
         self.prompt_builder = PromptBuilder()
         self.response_parser = ResponseParser()
     
@@ -102,11 +105,40 @@ class SummarizationEngine:
                 return cached_summary
         
         try:
+            # Get custom prompt if configured
+            custom_prompt = None
+            if self.prompt_resolver and context:
+                try:
+                    from ..prompts.models import PromptContext
+                    prompt_context = PromptContext(
+                        guild_id=guild_id,
+                        channel_name=context.channel_name if hasattr(context, 'channel_name') else None,
+                        channel_id=channel_id,
+                        category=getattr(options, 'category', 'discussion'),
+                        summary_type=options.summary_length.value,
+                        message_count=len(messages)
+                    )
+
+                    resolved = await self.prompt_resolver.resolve_prompt(
+                        guild_id=guild_id,
+                        context=prompt_context
+                    )
+
+                    # Use custom prompt content as system prompt
+                    custom_prompt = resolved.content
+                except Exception as e:
+                    # Log error but continue with default prompts
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        f"Failed to resolve custom prompt for guild {guild_id}, using defaults: {e}"
+                    )
+
             # Build summarization prompt
             prompt_data = self.prompt_builder.build_summarization_prompt(
                 messages=messages,
                 options=options,
-                context=context.to_dict() if context else None
+                context=context.to_dict() if context else None,
+                custom_system_prompt=custom_prompt
             )
             
             # Check if prompt is too long

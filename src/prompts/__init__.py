@@ -16,6 +16,7 @@ from .schema_validator import SchemaValidator
 from .path_parser import PATHFileParser
 from .fallback_chain import FallbackChainExecutor
 from .default_provider import DefaultPromptProvider
+from .guild_config_store import GuildPromptConfigStore
 from .models import (
     PromptContext,
     ResolvedPrompt,
@@ -32,6 +33,7 @@ __all__ = [
     "PATHFileParser",
     "FallbackChainExecutor",
     "DefaultPromptProvider",
+    "GuildPromptConfigStore",
     "PromptContext",
     "ResolvedPrompt",
     "PromptSource",

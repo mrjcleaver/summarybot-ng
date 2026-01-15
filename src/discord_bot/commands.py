@@ -212,6 +212,109 @@ class CommandRegistry:
         # Add the schedule command group to the tree
         self.tree.add_command(schedule_group)
 
+        # Register /prompt-config command group
+        prompt_config_group = discord.app_commands.Group(
+            name="prompt-config",
+            description="Manage custom prompt configurations"
+        )
+
+        @prompt_config_group.command(
+            name="set",
+            description="Configure custom prompts from a GitHub repository"
+        )
+        @discord.app_commands.describe(
+            repo_url="GitHub repository URL (e.g., github.com/owner/repo)",
+            branch="Git branch (defaults to main)"
+        )
+        async def prompt_config_set_command(
+            interaction: discord.Interaction,
+            repo_url: str,
+            branch: Optional[str] = None
+        ):
+            """Configure custom prompts."""
+            handler = self.bot.services.get('prompt_config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Prompt configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_set(interaction, repo_url=repo_url, branch=branch)
+
+        @prompt_config_group.command(
+            name="status",
+            description="Show current prompt configuration status"
+        )
+        async def prompt_config_status_command(interaction: discord.Interaction):
+            """Show prompt configuration status."""
+            handler = self.bot.services.get('prompt_config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Prompt configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_status(interaction)
+
+        @prompt_config_group.command(
+            name="remove",
+            description="Remove custom prompt configuration"
+        )
+        async def prompt_config_remove_command(interaction: discord.Interaction):
+            """Remove custom prompts."""
+            handler = self.bot.services.get('prompt_config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Prompt configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_remove(interaction)
+
+        @prompt_config_group.command(
+            name="refresh",
+            description="Refresh prompt cache and fetch fresh prompts"
+        )
+        async def prompt_config_refresh_command(interaction: discord.Interaction):
+            """Refresh prompt cache."""
+            handler = self.bot.services.get('prompt_config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Prompt configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_refresh(interaction)
+
+        @prompt_config_group.command(
+            name="test",
+            description="Test prompt resolution for a category"
+        )
+        @discord.app_commands.describe(
+            category="Prompt category to test (meeting, discussion, moderation)"
+        )
+        async def prompt_config_test_command(
+            interaction: discord.Interaction,
+            category: str = "discussion"
+        ):
+            """Test prompt resolution."""
+            handler = self.bot.services.get('prompt_config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Prompt configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_test(interaction, category=category)
+
+        # Add the prompt-config command group to the tree
+        self.tree.add_command(prompt_config_group)
+
         # Register help command
         @self.tree.command(
             name="help",
@@ -234,6 +337,12 @@ class CommandRegistry:
             embed.add_field(
                 name="/schedule",
                 value="Manage scheduled summaries (list, create, delete, pause, resume)",
+                inline=False
+            )
+
+            embed.add_field(
+                name="/prompt-config",
+                value="Configure custom prompts from GitHub repositories (set, status, remove, refresh, test)",
                 inline=False
             )
 

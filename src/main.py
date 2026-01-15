@@ -54,6 +54,8 @@ class SummaryBotApp:
         self.task_scheduler: Optional[TaskScheduler] = None
         self.webhook_server: Optional[WebhookServer] = None
         self.command_logger = None  # Command logging system
+        self.prompt_resolver = None  # Prompt template resolver
+        self.guild_config_store = None  # Guild config store
         self.running = False
 
         # Setup logging
@@ -247,11 +249,52 @@ class SummaryBotApp:
         )
         cache = SummaryCache(cache_backend)
 
-        # Initialize summarization engine
+        # Initialize prompt resolver for custom prompts
+        prompt_resolver = None
+        try:
+            from .prompts import PromptTemplateResolver, GuildPromptConfigStore
+            from .data.sqlite import SQLiteConnection
+            from cryptography.fernet import Fernet
+
+            # Get database path from config or use default
+            db_path = self.config.database_config.url.replace('sqlite:///', '') if self.config.database_config else "data/summarybot.db"
+
+            # Initialize database connection
+            db_connection = SQLiteConnection(db_path=db_path)
+            await db_connection.connect()
+
+            # Get encryption key from environment (or generate one)
+            encryption_key = os.environ.get('PROMPT_TOKEN_ENCRYPTION_KEY')
+            if encryption_key:
+                encryption_key = encryption_key.encode()
+            else:
+                # Generate ephemeral key (tokens won't persist across restarts)
+                encryption_key = Fernet.generate_key()
+
+            # Initialize guild config store
+            guild_config_store = GuildPromptConfigStore(
+                connection=db_connection,
+                encryption_key=encryption_key
+            )
+
+            # Initialize prompt resolver
+            prompt_resolver = PromptTemplateResolver(config_store=guild_config_store)
+
+            self.logger.info("Prompt resolver initialized for custom prompts")
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize prompt resolver, using default prompts only: {e}")
+            prompt_resolver = None
+
+        # Initialize summarization engine with prompt resolver
         self.summarization_engine = SummarizationEngine(
             claude_client=claude_client,
-            cache=cache
+            cache=cache,
+            prompt_resolver=prompt_resolver
         )
+
+        # Store prompt resolver for command handler
+        self.prompt_resolver = prompt_resolver
+        self.guild_config_store = guild_config_store if prompt_resolver else None
 
         self.logger.info("Core components initialized")
 
@@ -278,12 +321,27 @@ class SummaryBotApp:
             command_logger=self.command_logger  # Add command logging
         )
 
+        # Initialize prompt config handler if prompt resolver is available
+        if self.prompt_resolver and self.guild_config_store:
+            from .command_handlers.prompt_config import PromptConfigCommandHandler
+            prompt_config_handler = PromptConfigCommandHandler(
+                config_store=self.guild_config_store,
+                resolver=self.prompt_resolver,
+                permission_manager=self.permission_manager,
+                command_logger=self.command_logger
+            )
+        else:
+            prompt_config_handler = None
+
         # Note: schedule_handler will be created after task_scheduler initialization
 
-        # Add command handler to bot services
+        # Add command handlers to bot services
         if not self.discord_bot.services:
             self.discord_bot.services = {}
         self.discord_bot.services['summarize_handler'] = summarize_handler
+        if prompt_config_handler:
+            self.discord_bot.services['prompt_config_handler'] = prompt_config_handler
+            self.logger.info("Prompt config handler initialized")
 
         # Event handlers are already registered in SummaryBot.__init__
         # Slash commands will be set up when bot starts

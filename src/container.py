@@ -5,6 +5,8 @@ Provides centralized management of application services and their dependencies.
 """
 
 from typing import Optional
+import os
+from cryptography.fernet import Fernet
 from .config.settings import BotConfig
 from .summarization.engine import SummarizationEngine
 from .summarization.claude_client import ClaudeClient
@@ -28,6 +30,9 @@ class ServiceContainer:
         self._summary_repository: Optional[SummaryRepository] = None
         self._config_repository: Optional[ConfigRepository] = None
         self._task_repository: Optional[TaskRepository] = None
+        self._prompt_resolver = None
+        self._guild_config_store = None
+        self._db_connection = None
 
     @property
     def claude_client(self) -> ClaudeClient:
@@ -45,12 +50,53 @@ class ServiceContainer:
         return self._cache
 
     @property
+    def db_connection(self):
+        """Get database connection instance."""
+        if self._db_connection is None and self.config.database_config:
+            from .data.sqlite import SQLiteConnection
+            self._db_connection = SQLiteConnection(
+                db_path=self.config.database_config.url.replace('sqlite:///', '')
+            )
+        return self._db_connection
+
+    @property
+    def guild_config_store(self):
+        """Get guild prompt config store instance."""
+        if self._guild_config_store is None and self.db_connection:
+            from .prompts import GuildPromptConfigStore
+
+            # Get encryption key from environment (or generate one)
+            encryption_key = os.environ.get('PROMPT_TOKEN_ENCRYPTION_KEY')
+            if encryption_key:
+                encryption_key = encryption_key.encode()
+            else:
+                # Generate ephemeral key (tokens won't persist across restarts)
+                encryption_key = Fernet.generate_key()
+
+            self._guild_config_store = GuildPromptConfigStore(
+                connection=self.db_connection,
+                encryption_key=encryption_key
+            )
+        return self._guild_config_store
+
+    @property
+    def prompt_resolver(self):
+        """Get prompt template resolver instance."""
+        if self._prompt_resolver is None:
+            from .prompts import PromptTemplateResolver
+            self._prompt_resolver = PromptTemplateResolver(
+                config_store=self.guild_config_store
+            )
+        return self._prompt_resolver
+
+    @property
     def summarization_engine(self) -> SummarizationEngine:
         """Get summarization engine instance."""
         if self._summarization_engine is None:
             self._summarization_engine = SummarizationEngine(
                 claude_client=self.claude_client,
-                cache=self.cache
+                cache=self.cache,
+                prompt_resolver=self.prompt_resolver
             )
         return self._summarization_engine
 

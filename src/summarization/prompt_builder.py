@@ -36,21 +36,26 @@ class PromptBuilder:
     def build_summarization_prompt(self,
                                  messages: List[ProcessedMessage],
                                  options: SummaryOptions,
-                                 context: Optional[Dict[str, Any]] = None) -> SummarizationPrompt:
+                                 context: Optional[Dict[str, Any]] = None,
+                                 custom_system_prompt: Optional[str] = None) -> SummarizationPrompt:
         """Build a complete summarization prompt.
-        
+
         Args:
             messages: List of processed messages to summarize
             options: Summarization options
             context: Additional context information
-            
+            custom_system_prompt: Optional custom system prompt (overrides default)
+
         Returns:
             Complete prompt ready for Claude API
         """
         context = context or {}
-        
-        # Build system prompt
-        system_prompt = self.build_system_prompt(options)
+
+        # Build system prompt (use custom if provided, otherwise default)
+        if custom_system_prompt:
+            system_prompt = custom_system_prompt
+        else:
+            system_prompt = self.build_system_prompt(options)
         
         # Build user prompt with messages
         user_prompt = self.build_user_prompt(messages, context, options)
