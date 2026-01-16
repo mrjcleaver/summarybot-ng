@@ -45,7 +45,8 @@ class CommandRegistry:
             hours="Summarize messages from the last N hours",
             minutes="Summarize messages from the last N minutes",
             length="Summary length (default: detailed)",
-            perspective="Perspective/audience for the summary (default: general)"
+            perspective="Perspective/audience for the summary (default: general)",
+            channel="Channel to summarize (requires special role for cross-channel access)"
         )
         @discord.app_commands.choices(
             length=[
@@ -69,10 +70,11 @@ class CommandRegistry:
             hours: Optional[int] = None,
             minutes: Optional[int] = None,
             length: Optional[str] = "detailed",
-            perspective: Optional[str] = "general"
+            perspective: Optional[str] = "general",
+            channel: Optional[discord.TextChannel] = None
         ):
             """Summarize recent channel messages."""
-            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, messages={messages}, hours={hours}, minutes={minutes}, length={length}, perspective={perspective}")
+            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, target={channel.id if channel else 'current'}, messages={messages}, hours={hours}, minutes={minutes}, length={length}, perspective={perspective}")
             # Defer response since summarization takes time
             await interaction.response.defer(ephemeral=False)
 
@@ -93,7 +95,8 @@ class CommandRegistry:
                     hours=hours,
                     minutes=minutes,
                     length=length,
-                    perspective=perspective
+                    perspective=perspective,
+                    channel=channel
                 )
 
             except Exception as e:
@@ -352,7 +355,11 @@ class CommandRegistry:
 
             embed.add_field(
                 name="/summarize",
-                value="Create a summary of recent channel messages",
+                value=(
+                    "Create a summary of recent channel messages\n"
+                    "• Use `channel` parameter to summarize other channels (requires configured role)\n"
+                    "• Brief summaries automatically use faster Haiku model for 12x cost savings"
+                ),
                 inline=False
             )
 

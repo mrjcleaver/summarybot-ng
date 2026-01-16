@@ -35,7 +35,8 @@ class SummarizeCommandHandler(BaseCommandHandler):
                  message_fetcher: Optional[MessageFetcher] = None,
                  message_filter: Optional[MessageFilter] = None,
                  message_cleaner: Optional[MessageCleaner] = None,
-                 command_logger=None):
+                 command_logger=None,
+                 config_manager=None):
         """
         Initialize summarize command handler.
 
@@ -46,12 +47,14 @@ class SummarizeCommandHandler(BaseCommandHandler):
             message_filter: MessageFilter instance
             message_cleaner: MessageCleaner instance
             command_logger: CommandLogger instance for audit logging (optional)
+            config_manager: ConfigManager instance for guild configuration (optional)
         """
         super().__init__(summarization_engine, permission_manager, command_logger=command_logger)
 
         self.message_fetcher = message_fetcher
         self.message_filter = message_filter
         self.message_cleaner = message_cleaner
+        self.config_manager = config_manager
 
         # Override rate limits for summarization (more restrictive)
         self.max_requests_per_minute = 3
@@ -72,7 +75,8 @@ class SummarizeCommandHandler(BaseCommandHandler):
         hours: Optional[int] = None,
         minutes: Optional[int] = None,
         length: Optional[str] = "detailed",
-        perspective: Optional[str] = "general"
+        perspective: Optional[str] = "general",
+        channel: Optional[discord.TextChannel] = None
     ) -> None:
         """
         Handle /summarize slash command interaction.
@@ -86,14 +90,71 @@ class SummarizeCommandHandler(BaseCommandHandler):
             minutes: Minutes of messages to look back
             length: Summary length (brief, detailed, comprehensive)
             perspective: Perspective/audience (general, developer, marketing, etc.)
+            channel: Target channel to summarize (optional, defaults to current channel)
         """
         try:
+            # Determine target channel
+            target_channel = channel or interaction.channel
+
+            # Cross-channel permission check
+            if channel and channel.id != interaction.channel.id:
+                # User is requesting cross-channel summary
+                if not self.config_manager:
+                    await interaction.followup.send(
+                        "❌ Configuration manager not available.",
+                        ephemeral=True
+                    )
+                    return
+
+                # Get guild config
+                guild_config = self.config_manager.get_guild_config(str(interaction.guild_id))
+
+                if not guild_config or not guild_config.cross_channel_summary_role_name:
+                    # Feature not configured
+                    await interaction.followup.send(
+                        "❌ Cross-channel summaries are not enabled on this server.",
+                        ephemeral=True
+                    )
+                    return
+
+                # Check if user has required role
+                user_member = interaction.guild.get_member(interaction.user.id)
+                has_cross_channel_role = any(
+                    role.name == guild_config.cross_channel_summary_role_name
+                    for role in user_member.roles
+                )
+
+                if not has_cross_channel_role:
+                    await interaction.followup.send(
+                        f"❌ You need the **{guild_config.cross_channel_summary_role_name}** "
+                        f"role to summarize other channels.",
+                        ephemeral=True
+                    )
+                    return
+
+                # Check Discord read permissions for user
+                if not channel.permissions_for(user_member).read_message_history:
+                    await interaction.followup.send(
+                        f"❌ You don't have permission to read message history in {channel.mention}.",
+                        ephemeral=True
+                    )
+                    return
+
+                # Also check bot has permissions
+                bot_member = interaction.guild.me
+                if not channel.permissions_for(bot_member).read_message_history:
+                    await interaction.followup.send(
+                        f"❌ I don't have permission to read message history in {channel.mention}.",
+                        ephemeral=True
+                    )
+                    return
+
             # Default to 100 messages or 24 hours
             if messages:
                 # Message count mode
                 await self.handle_quick_summary(
                     interaction,
-                    channel=interaction.channel,
+                    channel=target_channel,
                     message_count=messages,
                     length=length,
                     perspective=perspective
@@ -103,7 +164,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 total_hours = (hours or 0) + (minutes or 0) / 60
                 await self.handle_summarize(
                     interaction,
-                    channel=interaction.channel,
+                    channel=target_channel,
                     hours=int(total_hours) if total_hours > 0 else 24,
                     length=length,
                     perspective=perspective,
@@ -113,7 +174,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 # Default: last 100 messages
                 await self.handle_quick_summary(
                     interaction,
-                    channel=interaction.channel,
+                    channel=target_channel,
                     message_count=100,
                     length=length,
                     perspective=perspective

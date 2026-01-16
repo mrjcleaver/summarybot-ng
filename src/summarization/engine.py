@@ -166,7 +166,7 @@ class SummarizationEngine:
             
             # Configure Claude options
             claude_options = ClaudeOptions(
-                model=options.claude_model,
+                model=options.get_model_for_length(),
                 max_tokens=options.get_max_tokens_for_length(),
                 temperature=options.temperature
             )

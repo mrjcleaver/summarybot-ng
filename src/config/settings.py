@@ -91,7 +91,8 @@ class GuildConfig:
     permission_settings: PermissionSettings = field(default_factory=PermissionSettings)
     webhook_enabled: bool = False
     webhook_secret: Optional[str] = None
-    
+    cross_channel_summary_role_name: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -101,7 +102,8 @@ class GuildConfig:
             'default_summary_options': self.default_summary_options.to_dict(),
             'permission_settings': self.permission_settings.to_dict(),
             'webhook_enabled': self.webhook_enabled,
-            'webhook_secret': self.webhook_secret
+            'webhook_secret': self.webhook_secret,
+            'cross_channel_summary_role_name': self.cross_channel_summary_role_name
         }
 
 

@@ -298,5 +298,21 @@ class SummaryOptions(BaseModel):
             SummaryLength.COMPREHENSIVE: "Provide an extensive summary covering all aspects of the conversation."
         }
         additions.append(length_instructions[self.summary_length])
-        
+
         return additions
+
+    def get_model_for_length(self) -> str:
+        """
+        Get the appropriate Claude model based on summary length.
+
+        For BRIEF summaries, automatically use Haiku for speed and cost efficiency.
+        For DETAILED/COMPREHENSIVE summaries, use the configured model.
+
+        Returns:
+            Model identifier string (e.g., 'claude-3-haiku-20240307')
+        """
+        if self.summary_length == SummaryLength.BRIEF:
+            return "claude-3-haiku-20240307"
+
+        # For detailed and comprehensive, use configured model
+        return self.claude_model

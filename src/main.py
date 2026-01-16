@@ -47,6 +47,7 @@ class SummaryBotApp:
 
     def __init__(self):
         self.config: Optional[BotConfig] = None
+        self.config_manager: Optional[ConfigManager] = None
         self.discord_bot: Optional[SummaryBot] = None
         self.summarization_engine: Optional[SummarizationEngine] = None
         self.message_processor: Optional[MessageProcessor] = None
@@ -80,8 +81,8 @@ class SummaryBotApp:
             self.logger.info("Initializing Summary Bot NG...")
 
             # Load configuration
-            config_manager = ConfigManager(config_path)
-            self.config = await config_manager.load_config()
+            self.config_manager = ConfigManager(config_path)
+            self.config = await self.config_manager.load_config()
 
             # Set log level from config
             logging.getLogger().setLevel(self.config.log_level.value)
@@ -325,7 +326,8 @@ class SummaryBotApp:
             message_fetcher=None,  # Will use direct Discord API calls
             message_filter=None,
             message_cleaner=None,
-            command_logger=self.command_logger  # Add command logging
+            command_logger=self.command_logger,  # Add command logging
+            config_manager=self.config_manager  # Enable cross-channel summarization
         )
 
         # Initialize prompt config handler if prompt resolver is available
