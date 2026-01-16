@@ -3,18 +3,21 @@ Claude response parsing and processing.
 """
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from ..models.summary import (
-    SummaryResult, ActionItem, TechnicalTerm, Participant, 
+    SummaryResult, ActionItem, TechnicalTerm, Participant,
     SummarizationContext, Priority
 )
 from ..models.message import ProcessedMessage
 from ..models.base import BaseModel, generate_id
 from ..exceptions import SummarizationError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -62,27 +65,40 @@ class ResponseParser:
             "extraction_stats": {},
             "warnings": []
         }
-        
+
+        # Log response preview for debugging
+        logger.debug(f"Parsing Claude response (length={len(response_content)})")
+        logger.debug(f"Response preview: {response_content[:500]}...")
+
         # Try each parser in order
         for parser_method in self.fallback_parsers:
             try:
+                logger.debug(f"Trying parser: {parser_method.__name__}")
                 parsed = parser_method(response_content, parsing_metadata)
                 if parsed:
+                    logger.debug(f"Parser {parser_method.__name__} succeeded")
                     # Enhance with message analysis
                     enhanced = self._enhance_with_message_analysis(
                         parsed, original_messages, context
                     )
-                    
+
                     # Validate and clean up
                     validated = self._validate_and_clean(enhanced, parsing_metadata)
-                    
+
                     return validated
-                    
+                else:
+                    logger.debug(f"Parser {parser_method.__name__} returned None")
+
             except Exception as e:
-                parsing_metadata["warnings"].append(f"{parser_method.__name__}: {str(e)}")
+                error_msg = f"{parser_method.__name__}: {str(e)}"
+                parsing_metadata["warnings"].append(error_msg)
+                logger.warning(f"Parser {parser_method.__name__} failed: {str(e)}")
                 continue
-        
-        # All parsers failed
+
+        # All parsers failed - log full details
+        logger.error(f"All parsers failed for response. Warnings: {parsing_metadata['warnings']}")
+        logger.error(f"Full response content: {response_content}")
+
         raise SummarizationError(
             message="Failed to parse Claude response with any available parser",
             error_code="RESPONSE_PARSE_FAILED",
@@ -338,6 +354,8 @@ class ResponseParser:
         """Validate and clean up parsed summary."""
         # Ensure summary text exists
         if not parsed.summary_text.strip():
+            logger.warning(f"Parsed summary has empty text. Parsing metadata: {metadata}")
+            logger.warning(f"Raw response: {parsed.raw_response[:1000]}")
             parsed.summary_text = "Summary could not be extracted from response."
         
         # Limit lengths to prevent excessive content
