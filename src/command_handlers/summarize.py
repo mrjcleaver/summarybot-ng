@@ -96,11 +96,12 @@ class SummarizeCommandHandler(BaseCommandHandler):
             # Determine target channel
             target_channel = channel or interaction.channel
 
-            # Cross-channel permission check (before deferring, so we can send error responses)
+            # Cross-channel permission check
+            # NOTE: Interaction is already deferred by commands.py, so we must use followup.send()
             if channel and channel.id != interaction.channel.id:
                 # User is requesting cross-channel summary
                 if not self.config_manager:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         "❌ Configuration manager not available.",
                         ephemeral=True
                     )
@@ -109,7 +110,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 # Get guild config from bot config
                 bot_config = self.config_manager.get_current_config()
                 if not bot_config:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         "❌ Configuration not loaded.",
                         ephemeral=True
                     )
@@ -119,7 +120,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
                 if not guild_config.cross_channel_summary_role_name:
                     # Feature not configured
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         "❌ Cross-channel summaries are not enabled on this server.",
                         ephemeral=True
                     )
@@ -133,7 +134,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 )
 
                 if not has_cross_channel_role:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         f"❌ You need the **{guild_config.cross_channel_summary_role_name}** "
                         f"role to summarize other channels.",
                         ephemeral=True
@@ -142,7 +143,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
                 # Check Discord read permissions for user
                 if not channel.permissions_for(user_member).read_message_history:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         f"❌ You don't have permission to read message history in {channel.mention}.",
                         ephemeral=True
                     )
@@ -151,7 +152,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 # Also check bot has permissions
                 bot_member = interaction.guild.me
                 if not channel.permissions_for(bot_member).read_message_history:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         f"❌ I don't have permission to read message history in {channel.mention}.",
                         ephemeral=True
                     )
