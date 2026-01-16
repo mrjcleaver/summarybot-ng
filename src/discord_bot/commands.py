@@ -340,6 +340,69 @@ class CommandRegistry:
         # Add the prompt-config command group to the tree
         self.tree.add_command(prompt_config_group)
 
+        # Register /config command group
+        config_group = discord.app_commands.Group(
+            name="config",
+            description="Manage server configuration"
+        )
+
+        @config_group.command(
+            name="view",
+            description="View current server configuration"
+        )
+        async def config_view_command(interaction: discord.Interaction):
+            """View configuration."""
+            handler = self.bot.services.get('config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_config_view(interaction)
+
+        @config_group.command(
+            name="set-cross-channel-role",
+            description="Set the role allowed to use cross-channel summaries"
+        )
+        @discord.app_commands.describe(
+            role_name="Name of the Discord role (leave empty to disable feature)"
+        )
+        async def config_set_cross_channel_role_command(
+            interaction: discord.Interaction,
+            role_name: Optional[str] = None
+        ):
+            """Set cross-channel summary role."""
+            handler = self.bot.services.get('config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_config_set_cross_channel_role(interaction, role_name=role_name)
+
+        @config_group.command(
+            name="reset",
+            description="Reset all server configuration to defaults"
+        )
+        async def config_reset_command(interaction: discord.Interaction):
+            """Reset configuration."""
+            handler = self.bot.services.get('config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_config_reset(interaction)
+
+        # Add the config command group to the tree
+        self.tree.add_command(config_group)
+
         # Register help command
         @self.tree.command(
             name="help",
@@ -372,6 +435,12 @@ class CommandRegistry:
             embed.add_field(
                 name="/prompt-config",
                 value="Configure custom prompts from GitHub repositories (set, status, remove, refresh, test)",
+                inline=False
+            )
+
+            embed.add_field(
+                name="/config",
+                value="Manage server configuration (view, set-cross-channel-role, reset)",
                 inline=False
             )
 

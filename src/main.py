@@ -330,6 +330,13 @@ class SummaryBotApp:
             config_manager=self.config_manager  # Enable cross-channel summarization
         )
 
+        # Initialize config command handler
+        config_handler = ConfigCommandHandler(
+            summarization_engine=self.summarization_engine,
+            permission_manager=self.permission_manager,
+            config_manager=self.config_manager
+        )
+
         # Initialize prompt config handler if prompt resolver is available
         prompt_config_handler = None
         if self.prompt_resolver and self.guild_config_store:
@@ -354,6 +361,7 @@ class SummaryBotApp:
         if not self.discord_bot.services:
             self.discord_bot.services = {}
         self.discord_bot.services['summarize_handler'] = summarize_handler
+        self.discord_bot.services['config_handler'] = config_handler
         if prompt_config_handler:
             self.discord_bot.services['prompt_config_handler'] = prompt_config_handler
             self.logger.info("Prompt config handler initialized")

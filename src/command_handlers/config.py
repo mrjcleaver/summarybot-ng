@@ -111,6 +111,20 @@ class ConfigCommandHandler(BaseCommandHandler):
                         inline=False
                     )
 
+                # Cross-channel summary role
+                if config.cross_channel_summary_role_name:
+                    embed.add_field(
+                        name="🔀 Cross-Channel Summaries",
+                        value=f"✅ Enabled for role: **{config.cross_channel_summary_role_name}**",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="🔀 Cross-Channel Summaries",
+                        value="❌ Disabled (use `/config set-cross-channel-role` to enable)",
+                        inline=False
+                    )
+
                 # Default summary options
                 if config.default_summary_options:
                     options = config.default_summary_options
