@@ -195,7 +195,8 @@ class ConfigManager:
             default_summary_options=summary_options,
             permission_settings=permission_settings,
             webhook_enabled=data.get('webhook_enabled', False),
-            webhook_secret=data.get('webhook_secret')
+            webhook_secret=data.get('webhook_secret'),
+            cross_channel_summary_role_name=data.get('cross_channel_summary_role_name')
         )
     
     def _config_to_serializable_dict(self, config: BotConfig) -> Dict[str, Any]:

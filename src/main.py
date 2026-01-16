@@ -502,8 +502,11 @@ async def main():
     app = SummaryBotApp()
 
     try:
-        # Initialize with default database path
-        await app.initialize(db_path="data/summarybot.db")
+        # Initialize with default database path and config file
+        await app.initialize(
+            config_path="data/config.json",
+            db_path="data/summarybot.db"
+        )
 
         # Start all services
         await app.start()
