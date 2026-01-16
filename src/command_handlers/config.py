@@ -73,7 +73,8 @@ class ConfigCommandHandler(BaseCommandHandler):
 
             # Get guild config
             if self.config_manager:
-                config = await self.config_manager.get_guild_config(guild_id)
+                bot_config = self.config_manager.get_current_config()
+                config = bot_config.get_guild_config(guild_id) if bot_config else None
             else:
                 config = None
 
@@ -191,7 +192,14 @@ class ConfigCommandHandler(BaseCommandHandler):
             # Update configuration
             if self.config_manager:
                 guild_id = str(interaction.guild_id)
-                config = await self.config_manager.get_guild_config(guild_id)
+                bot_config = self.config_manager.get_current_config()
+                if not bot_config:
+                    raise UserError(
+                        message="Configuration not loaded",
+                        error_code="NO_CONFIG",
+                        user_message="Bot configuration is not available."
+                    )
+                config = bot_config.get_guild_config(guild_id)
 
                 if action == "enable":
                     config.enabled_channels = channel_ids
@@ -199,7 +207,7 @@ class ConfigCommandHandler(BaseCommandHandler):
                 else:  # exclude
                     config.excluded_channels = channel_ids
 
-                await self.config_manager.save_guild_config(config)
+                await self.config_manager.update_guild_config(guild_id, config)
 
             # Send success response
             channel_mentions = [f"<#{ch_id}>" for ch_id in channel_ids]
@@ -251,7 +259,14 @@ class ConfigCommandHandler(BaseCommandHandler):
                 )
 
             guild_id = str(interaction.guild_id)
-            config = await self.config_manager.get_guild_config(guild_id)
+            bot_config = self.config_manager.get_current_config()
+            if not bot_config:
+                raise UserError(
+                    message="Configuration not loaded",
+                    error_code="NO_CONFIG",
+                    user_message="Bot configuration is not available."
+                )
+            config = bot_config.get_guild_config(guild_id)
 
             # Update options
             if not config.default_summary_options:
@@ -308,7 +323,7 @@ class ConfigCommandHandler(BaseCommandHandler):
                 )
 
             # Save configuration
-            await self.config_manager.save_guild_config(config)
+            await self.config_manager.update_guild_config(guild_id, config)
 
             # Send success response
             embed = format_success_response(
@@ -351,7 +366,7 @@ class ConfigCommandHandler(BaseCommandHandler):
             from ..config.settings import GuildConfig
             default_config = GuildConfig(guild_id=guild_id)
 
-            await self.config_manager.save_guild_config(default_config)
+            await self.config_manager.update_guild_config(guild_id, default_config)
 
             embed = format_success_response(
                 title="Configuration Reset",
@@ -365,4 +380,75 @@ class ConfigCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.exception(f"Failed to reset config: {e}")
+            await self.send_error_response(interaction, e)
+
+    async def handle_config_set_cross_channel_role(self,
+                                                   interaction: discord.Interaction,
+                                                   role_name: Optional[str] = None) -> None:
+        """
+        Set or clear the cross-channel summary role.
+
+        Args:
+            interaction: Discord interaction object
+            role_name: Name of role allowed to use cross-channel summaries (None to disable)
+        """
+        try:
+            # Check admin permission
+            if not await self._check_admin_permission(interaction):
+                await self.send_permission_error(interaction)
+                return
+
+            if not self.config_manager:
+                raise UserError(
+                    message="Config manager not available",
+                    error_code="NO_CONFIG_MANAGER",
+                    user_message="Configuration management is not available."
+                )
+
+            guild_id = str(interaction.guild_id)
+            bot_config = self.config_manager.get_current_config()
+            if not bot_config:
+                raise UserError(
+                    message="Configuration not loaded",
+                    error_code="NO_CONFIG",
+                    user_message="Bot configuration is not available."
+                )
+            config = bot_config.get_guild_config(guild_id)
+
+            # Validate role exists if provided
+            if role_name:
+                role = discord.utils.get(interaction.guild.roles, name=role_name)
+                if not role:
+                    raise UserError(
+                        message=f"Role not found: {role_name}",
+                        error_code="ROLE_NOT_FOUND",
+                        user_message=f"Role **{role_name}** not found in this server. Please check the role name."
+                    )
+
+                config.cross_channel_summary_role_name = role_name
+                status_msg = f"Users with the **{role_name}** role can now summarize other channels."
+            else:
+                config.cross_channel_summary_role_name = None
+                status_msg = "Cross-channel summaries have been disabled."
+
+            # Save configuration
+            await self.config_manager.update_guild_config(guild_id, config)
+
+            # Send success response
+            embed = format_success_response(
+                title="Cross-Channel Configuration Updated",
+                description=status_msg,
+                fields={
+                    "Feature": "Cross-Channel Summaries",
+                    "Status": "Enabled" if role_name else "Disabled",
+                    "Required Role": role_name or "N/A"
+                }
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except UserError as e:
+            await self.send_error_response(interaction, e)
+        except Exception as e:
+            logger.exception(f"Failed to set cross-channel role: {e}")
             await self.send_error_response(interaction, e)
