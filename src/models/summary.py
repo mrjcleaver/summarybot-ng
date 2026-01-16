@@ -254,6 +254,7 @@ class SummaryResult(BaseModel):
 class SummaryOptions(BaseModel):
     """Options for controlling summarization behavior."""
     summary_length: SummaryLength = SummaryLength.DETAILED
+    perspective: str = "general"  # general, developer, marketing, product, finance, executive, support
     include_bots: bool = False
     include_attachments: bool = True
     excluded_users: List[str] = field(default_factory=list)

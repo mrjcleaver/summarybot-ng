@@ -34,6 +34,7 @@ class PromptContext:
     channel_id: Optional[str] = None
     category: str = "discussion"  # meeting, discussion, moderation
     summary_type: str = "detailed"  # brief, detailed, action_items, comprehensive
+    perspective: str = "general"  # general, developer, marketing, product, finance, executive, support
     message_count: int = 0
     user_id: Optional[str] = None
     additional_context: Dict[str, Any] = field(default_factory=dict)
@@ -49,6 +50,7 @@ class PromptContext:
             "category": self.category,
             "type": self.summary_type,
             "summary_type": self.summary_type,
+            "perspective": self.perspective,
             "message_count": self.message_count,
             "user_id": self.user_id or "",
             **self.additional_context

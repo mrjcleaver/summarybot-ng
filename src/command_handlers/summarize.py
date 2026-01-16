@@ -70,7 +70,9 @@ class SummarizeCommandHandler(BaseCommandHandler):
         interaction: discord.Interaction,
         messages: Optional[int] = None,
         hours: Optional[int] = None,
-        minutes: Optional[int] = None
+        minutes: Optional[int] = None,
+        length: Optional[str] = "detailed",
+        perspective: Optional[str] = "general"
     ) -> None:
         """
         Handle /summarize slash command interaction.
@@ -82,6 +84,8 @@ class SummarizeCommandHandler(BaseCommandHandler):
             messages: Number of messages to summarize (overrides time-based)
             hours: Hours of messages to look back
             minutes: Minutes of messages to look back
+            length: Summary length (brief, detailed, comprehensive)
+            perspective: Perspective/audience (general, developer, marketing, etc.)
         """
         try:
             # Default to 100 messages or 24 hours
@@ -90,7 +94,9 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 await self.handle_quick_summary(
                     interaction,
                     channel=interaction.channel,
-                    message_count=messages
+                    message_count=messages,
+                    length=length,
+                    perspective=perspective
                 )
             elif hours or minutes:
                 # Time-based mode
@@ -99,7 +105,8 @@ class SummarizeCommandHandler(BaseCommandHandler):
                     interaction,
                     channel=interaction.channel,
                     hours=int(total_hours) if total_hours > 0 else 24,
-                    length="detailed",
+                    length=length,
+                    perspective=perspective,
                     include_bots=False
                 )
             else:
@@ -107,7 +114,9 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 await self.handle_quick_summary(
                     interaction,
                     channel=interaction.channel,
-                    message_count=100
+                    message_count=100,
+                    length=length,
+                    perspective=perspective
                 )
 
         except Exception as e:
@@ -182,6 +191,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                               channel: Optional[discord.TextChannel] = None,
                               hours: int = 24,
                               length: str = "detailed",
+                              perspective: str = "general",
                               include_bots: bool = False,
                               start_time: Optional[str] = None,
                               end_time: Optional[str] = None) -> None:
@@ -193,6 +203,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
             channel: Target channel (defaults to current channel)
             hours: Number of hours to look back (if start_time not specified)
             length: Summary length (brief/detailed/comprehensive)
+            perspective: Perspective/audience (general, developer, marketing, etc.)
             include_bots: Whether to include bot messages
             start_time: Custom start time string
             end_time: Custom end time string
@@ -272,6 +283,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
             # Create summary options
             summary_options = SummaryOptions(
                 summary_length=summary_length,
+                perspective=perspective,
                 include_bots=include_bots,
                 include_attachments=True,
                 min_messages=5
@@ -359,7 +371,9 @@ class SummarizeCommandHandler(BaseCommandHandler):
                                   interaction: discord.Interaction,
                                   minutes: int = 60,
                                   channel: Optional[discord.TextChannel] = None,
-                                  message_count: Optional[int] = None) -> None:
+                                  message_count: Optional[int] = None,
+                                  length: str = "detailed",
+                                  perspective: str = "general") -> None:
         """
         Handle quick summary command for recent messages.
 
@@ -368,6 +382,8 @@ class SummarizeCommandHandler(BaseCommandHandler):
             minutes: Number of minutes to look back (default: 60)
             channel: Target channel (defaults to interaction.channel)
             message_count: Number of messages to summarize (overrides time-based)
+            length: Summary length (brief, detailed, comprehensive)
+            perspective: Perspective/audience (general, developer, marketing, etc.)
         """
         await self.defer_response(interaction)
 
@@ -394,8 +410,11 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 raw_messages = await self.fetch_recent_messages(target_channel, time_delta)
 
             # Process messages
+            # Convert length string to enum
+            summary_length_enum = SummaryLength(length)
             summary_options = SummaryOptions(
-                summary_length=SummaryLength.BRIEF,
+                summary_length=summary_length_enum,
+                perspective=perspective,
                 include_bots=False
             )
             processed_messages = await self._process_messages(raw_messages, summary_options)

@@ -43,16 +43,36 @@ class CommandRegistry:
         @discord.app_commands.describe(
             messages="Number of messages to summarize (default: 100)",
             hours="Summarize messages from the last N hours",
-            minutes="Summarize messages from the last N minutes"
+            minutes="Summarize messages from the last N minutes",
+            length="Summary length (default: detailed)",
+            perspective="Perspective/audience for the summary (default: general)"
+        )
+        @discord.app_commands.choices(
+            length=[
+                discord.app_commands.Choice(name="Brief", value="brief"),
+                discord.app_commands.Choice(name="Detailed (default)", value="detailed"),
+                discord.app_commands.Choice(name="Comprehensive", value="comprehensive")
+            ],
+            perspective=[
+                discord.app_commands.Choice(name="General (default)", value="general"),
+                discord.app_commands.Choice(name="Developer/Technical", value="developer"),
+                discord.app_commands.Choice(name="Marketing/Brand", value="marketing"),
+                discord.app_commands.Choice(name="Product Manager", value="product"),
+                discord.app_commands.Choice(name="Finance/Business", value="finance"),
+                discord.app_commands.Choice(name="Executive/Leadership", value="executive"),
+                discord.app_commands.Choice(name="Support/Customer Success", value="support")
+            ]
         )
         async def summarize_command(
             interaction: discord.Interaction,
             messages: Optional[int] = None,
             hours: Optional[int] = None,
-            minutes: Optional[int] = None
+            minutes: Optional[int] = None,
+            length: Optional[str] = "detailed",
+            perspective: Optional[str] = "general"
         ):
             """Summarize recent channel messages."""
-            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, messages={messages}, hours={hours}, minutes={minutes}")
+            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, messages={messages}, hours={hours}, minutes={minutes}, length={length}, perspective={perspective}")
             # Defer response since summarization takes time
             await interaction.response.defer(ephemeral=False)
 
@@ -71,7 +91,9 @@ class CommandRegistry:
                     interaction,
                     messages=messages,
                     hours=hours,
-                    minutes=minutes
+                    minutes=minutes,
+                    length=length,
+                    perspective=perspective
                 )
 
             except Exception as e:

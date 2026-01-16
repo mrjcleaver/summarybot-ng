@@ -116,6 +116,7 @@ class SummarizationEngine:
                         channel_id=channel_id,
                         category=getattr(options, 'category', 'discussion'),
                         summary_type=options.summary_length.value,
+                        perspective=getattr(options, 'perspective', 'general'),
                         message_count=len(messages)
                     )
 
