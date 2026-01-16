@@ -106,10 +106,18 @@ class SummarizeCommandHandler(BaseCommandHandler):
                     )
                     return
 
-                # Get guild config
-                guild_config = self.config_manager.get_guild_config(str(interaction.guild_id))
+                # Get guild config from bot config
+                bot_config = self.config_manager.get_current_config()
+                if not bot_config:
+                    await interaction.followup.send(
+                        "❌ Configuration not loaded.",
+                        ephemeral=True
+                    )
+                    return
 
-                if not guild_config or not guild_config.cross_channel_summary_role_name:
+                guild_config = bot_config.get_guild_config(str(interaction.guild_id))
+
+                if not guild_config.cross_channel_summary_role_name:
                     # Feature not configured
                     await interaction.followup.send(
                         "❌ Cross-channel summaries are not enabled on this server.",
