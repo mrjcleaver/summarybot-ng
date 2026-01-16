@@ -1,6 +1,7 @@
 {
   "dependencies": {
-    "agentic-flow": "^1.10.2"
+    "agentic-flow": "^1.10.2",
+    "claude-flow": "^3.0.0-alpha.82"
   },
   "scripts": {
     "test": "poetry run pytest tests/",
