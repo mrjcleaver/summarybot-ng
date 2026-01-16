@@ -84,7 +84,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
         This is the main entry point from Discord slash commands.
 
         Args:
-            interaction: Discord interaction (already deferred)
+            interaction: Discord interaction
             messages: Number of messages to summarize (overrides time-based)
             hours: Hours of messages to look back
             minutes: Minutes of messages to look back
@@ -96,11 +96,11 @@ class SummarizeCommandHandler(BaseCommandHandler):
             # Determine target channel
             target_channel = channel or interaction.channel
 
-            # Cross-channel permission check
+            # Cross-channel permission check (before deferring, so we can send error responses)
             if channel and channel.id != interaction.channel.id:
                 # User is requesting cross-channel summary
                 if not self.config_manager:
-                    await interaction.followup.send(
+                    await interaction.response.send_message(
                         "❌ Configuration manager not available.",
                         ephemeral=True
                     )
@@ -109,7 +109,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 # Get guild config from bot config
                 bot_config = self.config_manager.get_current_config()
                 if not bot_config:
-                    await interaction.followup.send(
+                    await interaction.response.send_message(
                         "❌ Configuration not loaded.",
                         ephemeral=True
                     )
@@ -119,7 +119,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
                 if not guild_config.cross_channel_summary_role_name:
                     # Feature not configured
-                    await interaction.followup.send(
+                    await interaction.response.send_message(
                         "❌ Cross-channel summaries are not enabled on this server.",
                         ephemeral=True
                     )
@@ -133,7 +133,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 )
 
                 if not has_cross_channel_role:
-                    await interaction.followup.send(
+                    await interaction.response.send_message(
                         f"❌ You need the **{guild_config.cross_channel_summary_role_name}** "
                         f"role to summarize other channels.",
                         ephemeral=True
@@ -142,7 +142,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
                 # Check Discord read permissions for user
                 if not channel.permissions_for(user_member).read_message_history:
-                    await interaction.followup.send(
+                    await interaction.response.send_message(
                         f"❌ You don't have permission to read message history in {channel.mention}.",
                         ephemeral=True
                     )
@@ -151,7 +151,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 # Also check bot has permissions
                 bot_member = interaction.guild.me
                 if not channel.permissions_for(bot_member).read_message_history:
-                    await interaction.followup.send(
+                    await interaction.response.send_message(
                         f"❌ I don't have permission to read message history in {channel.mention}.",
                         ephemeral=True
                     )
