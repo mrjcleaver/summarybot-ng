@@ -292,7 +292,7 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
                 if not has_permission:
                     error_msg = "You don't have permission to use this command."
-                    await interaction.response.send_message(content=error_msg, ephemeral=True)
+                    await interaction.followup.send(content=error_msg, ephemeral=True)
                     return
 
             # Determine target channel

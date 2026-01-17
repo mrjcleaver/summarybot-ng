@@ -272,9 +272,24 @@ class ClaudeClient:
                 
                 raise NetworkError("Claude", str(e))
                 
+            except anthropic.NotFoundError as e:
+                self.usage_stats.add_error()
+                error_message = str(e)
+                logger.error(f"NotFoundError from API: {error_message}")
+                logger.error(f"Request was for model: {normalized_model}, base_url: {self.base_url}")
+
+                raise ModelUnavailableError(
+                    normalized_model,
+                    context={
+                        "error": error_message,
+                        "base_url": self.base_url,
+                        "is_openrouter": self.is_openrouter
+                    }
+                )
+
             except anthropic.BadRequestError as e:
                 self.usage_stats.add_error()
-                
+
                 # Check for specific error types
                 error_message = str(e)
                 if "maximum context length" in error_message.lower():
@@ -282,12 +297,12 @@ class ClaudeClient:
                         message="Prompt exceeds maximum context length",
                         api_error_code="context_length_exceeded"
                     )
-                
+
                 raise ClaudeAPIError(
                     message=f"Bad request: {error_message}",
                     api_error_code="bad_request"
                 )
-                
+
             except Exception as e:
                 self.usage_stats.add_error()
                 
