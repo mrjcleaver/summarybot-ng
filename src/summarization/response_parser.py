@@ -230,7 +230,12 @@ class ResponseParser:
         action_items_text = self._extract_markdown_list(content, r"(?:## )?Action Items?")
         technical_terms_text = self._extract_markdown_list(content, r"(?:## )?Technical Terms?")
         participants_text = self._extract_markdown_list(content, r"(?:## )?Participants?")
-        
+
+        # If we didn't extract ANY meaningful content, return None to let freeform parser try
+        if not summary_text and not key_points and not action_items_text and not technical_terms_text:
+            logger.debug("Markdown parser found no structured content, falling back to next parser")
+            return None
+
         # Convert to objects
         action_items = [ActionItem(description=item) for item in action_items_text]
         
