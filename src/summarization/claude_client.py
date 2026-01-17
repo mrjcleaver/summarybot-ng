@@ -321,13 +321,13 @@ class ClaudeClient:
     
     async def health_check(self) -> bool:
         """Check if Claude API is accessible.
-        
+
         Returns:
             True if API is healthy, False otherwise
         """
         try:
-            # Simple test request
-            options = ClaudeOptions(max_tokens=10)
+            # Simple test request (use 5 tokens to avoid OpenRouter credit calculation bug)
+            options = ClaudeOptions(max_tokens=5)
             await self.create_summary(
                 prompt="Say hello",
                 system_prompt="You are a helpful assistant.",
