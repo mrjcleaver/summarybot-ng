@@ -153,14 +153,46 @@ class ResponseParser:
         
         try:
             data = json.loads(json_str)
+
+            # Extract components - support both standard and custom emoji formats
+            summary_text = (
+                data.get("summary_text", "") or
+                data.get("summary", "") or
+                data.get("🎯 Overview", "") or
+                data.get("Overview", "")
+            )
+
+            # Extract key points from various formats
+            key_points_raw = (
+                data.get("key_points", []) or
+                data.get("💡 Key Technical Points", []) or
+                data.get("Key Technical Points", []) or
+                []
+            )
+
+            # Flatten key points if they're in dict format
+            key_points = []
+            if isinstance(key_points_raw, list):
+                for item in key_points_raw:
+                    if isinstance(item, dict):
+                        # Extract values from dict (e.g., {"Point 1": "...", "Point 2": "..."})
+                        for key, value in item.items():
+                            if isinstance(value, str) and not key.startswith('_'):
+                                key_points.append(value)
+                    elif isinstance(item, str):
+                        key_points.append(item)
+            elif isinstance(key_points_raw, str):
+                key_points = [key_points_raw]
             
-            # Extract components
-            summary_text = data.get("summary_text", "")
-            key_points = data.get("key_points", [])
-            
-            # Parse action items
+            # Parse action items - support custom emoji format
+            action_items_raw = (
+                data.get("action_items", []) or
+                data.get("🔧 Action Items", []) or
+                data.get("Action Items", []) or
+                []
+            )
             action_items = []
-            for item_data in data.get("action_items", []):
+            for item_data in action_items_raw:
                 if isinstance(item_data, dict):
                     priority = Priority.MEDIUM  # default
                     if "priority" in item_data:
