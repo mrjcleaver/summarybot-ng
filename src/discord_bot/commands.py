@@ -385,6 +385,28 @@ class CommandRegistry:
             await handler.handle_config_set_cross_channel_role(interaction, role_name=role_name)
 
         @config_group.command(
+            name="permissions",
+            description="Configure permission requirements for bot commands"
+        )
+        @discord.app_commands.describe(
+            require="Require permissions to use commands (false = everyone can use)"
+        )
+        async def config_permissions_command(
+            interaction: discord.Interaction,
+            require: bool
+        ):
+            """Configure permission requirements."""
+            handler = self.bot.services.get('config_handler')
+            if not handler:
+                await interaction.response.send_message(
+                    "❌ Configuration feature is not available",
+                    ephemeral=True
+                )
+                return
+
+            await handler.handle_config_permissions(interaction, require=require)
+
+        @config_group.command(
             name="reset",
             description="Reset all server configuration to defaults"
         )

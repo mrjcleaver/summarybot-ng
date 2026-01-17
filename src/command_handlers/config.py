@@ -111,6 +111,23 @@ class ConfigCommandHandler(BaseCommandHandler):
                         inline=False
                     )
 
+                # Permission settings
+                perm_settings = config.permission_settings
+                if perm_settings.require_permissions:
+                    perm_text = "🔒 **Restricted** - Only allowed users can use commands\n"
+                    if perm_settings.allowed_users:
+                        perm_text += f"Allowed users: {len(perm_settings.allowed_users)}"
+                    else:
+                        perm_text += "⚠️ No users allowed - use `/config permissions require:false` to fix"
+                else:
+                    perm_text = "🔓 **Open** - All users can use commands"
+
+                embed.add_field(
+                    name="🔐 Permission Requirements",
+                    value=perm_text,
+                    inline=False
+                )
+
                 # Cross-channel summary role
                 if config.cross_channel_summary_role_name:
                     embed.add_field(
@@ -465,4 +482,66 @@ class ConfigCommandHandler(BaseCommandHandler):
             await self.send_error_response(interaction, e)
         except Exception as e:
             logger.exception(f"Failed to set cross-channel role: {e}")
+            await self.send_error_response(interaction, e)
+
+    async def handle_config_permissions(self,
+                                       interaction: discord.Interaction,
+                                       require: bool) -> None:
+        """
+        Toggle permission requirements for bot commands.
+
+        Args:
+            interaction: Discord interaction
+            require: Whether to require permissions (True) or allow everyone (False)
+        """
+        try:
+            # Check admin permission
+            if not await self._check_admin_permission(interaction):
+                await self.send_permission_error(interaction)
+                return
+
+            if not self.config_manager:
+                raise UserError(
+                    message="Config manager not available",
+                    error_code="NO_CONFIG_MANAGER",
+                    user_message="Configuration management is not available."
+                )
+
+            guild_id = str(interaction.guild_id)
+            bot_config = self.config_manager.get_current_config()
+            if not bot_config:
+                raise UserError(
+                    message="Configuration not loaded",
+                    error_code="NO_CONFIG",
+                    user_message="Bot configuration is not available."
+                )
+            config = bot_config.get_guild_config(guild_id)
+
+            # Update permission requirement
+            config.permission_settings.require_permissions = require
+
+            # Save configuration
+            await self.config_manager.update_guild_config(guild_id, config)
+
+            # Send success response
+            status_msg = (
+                "All users can now use bot commands." if not require
+                else "Only allowed users can use bot commands."
+            )
+
+            embed = format_success_response(
+                title="Permission Requirements Updated",
+                description=status_msg,
+                fields={
+                    "Require Permissions": "Yes" if require else "No",
+                    "Effect": "Restricted access" if require else "Open access"
+                }
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except UserError as e:
+            await self.send_error_response(interaction, e)
+        except Exception as e:
+            logger.exception(f"Failed to update permission settings: {e}")
             await self.send_error_response(interaction, e)
