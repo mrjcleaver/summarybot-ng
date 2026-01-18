@@ -335,7 +335,8 @@ class ConfigCommandHandler(BaseCommandHandler):
                 valid_models = [
                     "claude-3-opus-20240229",
                     "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307"
+                    "claude-3-haiku-20240307",
+                    "openrouter/auto"
                 ]
                 if model not in valid_models:
                     raise UserError(
