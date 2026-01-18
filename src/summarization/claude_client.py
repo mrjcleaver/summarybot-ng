@@ -163,7 +163,7 @@ class ClaudeClient:
         if self.is_openrouter:
             # OpenRouter requires provider prefix and no date suffix
             # If model is already in OpenRouter format, return as-is
-            if model.startswith('anthropic/'):
+            if model.startswith('anthropic/') or model.startswith('openrouter/'):
                 return model
 
             # Try to map from Claude Direct format to OpenRouter format
