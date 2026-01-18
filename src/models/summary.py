@@ -2,6 +2,7 @@
 Summary-related data models.
 """
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -250,6 +251,11 @@ class SummaryResult(BaseModel):
         }
 
 
+def _get_default_model() -> str:
+    """Get default Claude model from environment or use fallback."""
+    return os.getenv('SUMMARY_CLAUDE_MODEL', 'claude-3-sonnet-20240229')
+
+
 @dataclass
 class SummaryOptions(BaseModel):
     """Options for controlling summarization behavior."""
@@ -259,7 +265,7 @@ class SummaryOptions(BaseModel):
     include_attachments: bool = True
     excluded_users: List[str] = field(default_factory=list)
     min_messages: int = 5
-    claude_model: str = "claude-3-sonnet-20240229"
+    claude_model: str = field(default_factory=_get_default_model)
     temperature: float = 0.3
     max_tokens: int = 4000
     extract_action_items: bool = True
