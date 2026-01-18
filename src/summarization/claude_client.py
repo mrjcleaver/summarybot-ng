@@ -16,12 +16,13 @@ from ..exceptions import (
     RateLimitError, AuthenticationError, NetworkError, TimeoutError
 )
 from ..models.base import BaseModel
+from ..config.constants import DEFAULT_SUMMARIZATION_MODEL
 
 
 @dataclass
 class ClaudeOptions(BaseModel):
     """Options for Claude API requests."""
-    model: str = "claude-3-sonnet-20240229"
+    model: str = DEFAULT_SUMMARIZATION_MODEL
     max_tokens: int = 4000
     temperature: float = 0.3
     top_p: Optional[float] = None
