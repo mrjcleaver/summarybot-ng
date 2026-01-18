@@ -154,10 +154,11 @@ class ResponseParser:
         try:
             data = json.loads(json_str)
 
-            # Extract components - support both standard and custom emoji formats
+            # Extract components - support multiple format variations
             summary_text = (
                 data.get("summary_text", "") or
                 data.get("summary", "") or
+                data.get("overview", "") or  # camelCase format
                 data.get("🎯 Overview", "") or
                 data.get("Overview", "")
             )
@@ -165,6 +166,7 @@ class ResponseParser:
             # Extract key points from various formats
             key_points_raw = (
                 data.get("key_points", []) or
+                data.get("mainTopics", []) or  # camelCase format
                 data.get("💡 Key Technical Points", []) or
                 data.get("Key Technical Points", []) or
                 []
@@ -175,10 +177,16 @@ class ResponseParser:
             if isinstance(key_points_raw, list):
                 for item in key_points_raw:
                     if isinstance(item, dict):
-                        # Extract values from dict (e.g., {"Point 1": "...", "Point 2": "..."})
-                        for key, value in item.items():
-                            if isinstance(value, str) and not key.startswith('_'):
-                                key_points.append(value)
+                        # Handle nested topic/points format: {"topic": "...", "points": [...]}
+                        if "topic" in item and "points" in item:
+                            # Extract all points from this topic
+                            if isinstance(item["points"], list):
+                                key_points.extend(item["points"])
+                        else:
+                            # Extract values from simple dict (e.g., {"Point 1": "...", "Point 2": "..."})
+                            for key, value in item.items():
+                                if isinstance(value, str) and not key.startswith('_'):
+                                    key_points.append(value)
                     elif isinstance(item, str):
                         key_points.append(item)
             elif isinstance(key_points_raw, str):
