@@ -10,6 +10,7 @@ from .base import BaseCommandHandler
 from .utils import format_error_response, format_success_response, format_info_response
 from ..exceptions import UserError, create_error_context
 from ..models.summary import SummaryOptions, SummaryLength
+from ..config.constants import VALID_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ class ConfigCommandHandler(BaseCommandHandler):
                         f"Length: {options.summary_length.value}\n"
                         f"Include bots: {options.include_bots}\n"
                         f"Min messages: {options.min_messages}\n"
-                        f"Model: {options.claude_model}"
+                        f"Model: {options.summarization_model}"
                     )
                     embed.add_field(
                         name="🎯 Default Summary Options",
@@ -332,19 +333,13 @@ class ConfigCommandHandler(BaseCommandHandler):
 
             if model:
                 # Validate model name
-                valid_models = [
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307",
-                    "openrouter/auto"
-                ]
-                if model not in valid_models:
+                if model not in VALID_MODELS:
                     raise UserError(
                         message=f"Invalid model: {model}",
                         error_code="INVALID_MODEL",
-                        user_message=f"Model must be one of: {', '.join(valid_models)}"
+                        user_message=f"Model must be one of: {', '.join(VALID_MODELS)}"
                     )
-                config.default_summary_options.claude_model = model
+                config.default_summary_options.summarization_model = model
                 updated_fields.append(f"Model: {model}")
 
             if not updated_fields:

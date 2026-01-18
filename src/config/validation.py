@@ -5,6 +5,7 @@ Configuration validation for Summary Bot NG.
 from typing import List, Set
 import re
 from .settings import BotConfig, GuildConfig, SummaryOptions
+from .constants import VALID_MODELS
 
 
 class ConfigValidator:
@@ -197,15 +198,9 @@ class ConfigValidator:
         if options.max_tokens > 200000:
             errors.append("Max tokens cannot exceed 200,000")
         
-        # Validate Claude model name
-        valid_models = [
-            'claude-3-sonnet-20240229',
-            'claude-3-opus-20240229', 
-            'claude-3-haiku-20240307',
-            'claude-3-5-sonnet-20240620'
-        ]
-        if options.claude_model not in valid_models:
-            errors.append(f"Unknown Claude model: {options.claude_model}")
+        # Validate model name
+        if options.summarization_model not in VALID_MODELS:
+            errors.append(f"Unknown model: {options.summarization_model}. Valid models: {', '.join(VALID_MODELS)}")
         
         return errors
     

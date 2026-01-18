@@ -311,7 +311,7 @@ class SummarizationEngine:
             cost_result = self.claude_client.estimate_cost(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                model=options.claude_model
+                model=options.summarization_model
             )
 
             # Handle both sync and async for testing flexibility
@@ -325,7 +325,7 @@ class SummarizationEngine:
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=input_tokens + output_tokens,
-                model=options.claude_model,
+                model=options.summarization_model,
                 message_count=len(messages)
             )
 
@@ -335,7 +335,7 @@ class SummarizationEngine:
                 input_tokens=0,
                 output_tokens=0,
                 total_tokens=0,
-                model=options.claude_model,
+                model=options.summarization_model,
                 message_count=len(messages),
                 error=str(e)
             )
@@ -394,5 +394,5 @@ class SummarizationEngine:
         """Create hash of options for caching."""
         import hashlib
         
-        options_str = f"{options.summary_length.value}-{options.claude_model}-{options.temperature}-{options.max_tokens}"
+        options_str = f"{options.summary_length.value}-{options.summarization_model}-{options.temperature}-{options.max_tokens}"
         return hashlib.md5(options_str.encode()).hexdigest()[:16]

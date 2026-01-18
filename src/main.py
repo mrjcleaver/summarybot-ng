@@ -183,7 +183,7 @@ class SummaryBotApp:
                 'openrouter',
                 openrouter_key,
                 'https://openrouter.ai/api',  # Client appends /v1/messages
-                os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3-sonnet-20240229')
+                None  # Model selection handled by SummaryOptions
             )
 
         # If not explicitly set, always use OpenRouter (no Claude fallback)
@@ -198,7 +198,7 @@ class SummaryBotApp:
             'openrouter',
             openrouter_key,
             'https://openrouter.ai/api',  # Client appends /v1/messages
-            os.getenv('OPENROUTER_MODEL', 'anthropic/claude-3-sonnet-20240229')
+            None  # Model selection handled by SummaryOptions
         )
 
     def _is_production_environment(self) -> bool:

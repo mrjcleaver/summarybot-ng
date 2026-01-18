@@ -100,7 +100,7 @@ class SummaryTask:
             ],
             "summary_options": {
                 "summary_length": self.summary_options.summary_length.value,
-                "claude_model": self.summary_options.claude_model,
+                "claude_model": self.summary_options.summarization_model,
                 "temperature": self.summary_options.temperature,
                 "max_tokens": self.summary_options.max_tokens,
                 "include_bots": self.summary_options.include_bots,

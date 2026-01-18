@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from datetime import datetime
 from enum import Enum
 
+from .constants import DEFAULT_SUMMARIZATION_MODEL
+
 if TYPE_CHECKING:
     from .manager import ConfigManager
 
@@ -41,7 +43,7 @@ class SummaryOptions:
     include_attachments: bool = True
     excluded_users: List[str] = field(default_factory=list)
     min_messages: int = 5
-    claude_model: str = "claude-3-sonnet-20240229"
+    summarization_model: str = DEFAULT_SUMMARIZATION_MODEL
     temperature: float = 0.3
     max_tokens: int = 4000
     extract_action_items: bool = True
@@ -55,7 +57,9 @@ class SummaryOptions:
             'include_attachments': self.include_attachments,
             'excluded_users': self.excluded_users,
             'min_messages': self.min_messages,
-            'claude_model': self.claude_model,
+            'summarization_model': self.summarization_model,
+            # Keep old key for backward compatibility during migration
+            'claude_model': self.summarization_model,
             'temperature': self.temperature,
             'max_tokens': self.max_tokens,
             'extract_action_items': self.extract_action_items,

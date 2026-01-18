@@ -11,6 +11,7 @@ from pathlib import Path
 from .settings import BotConfig, GuildConfig
 from .environment import EnvironmentLoader
 from .validation import ConfigValidator, ValidationError
+from .constants import DEFAULT_SUMMARIZATION_MODEL
 
 
 class ConfigManager:
@@ -168,13 +169,21 @@ class ConfigManager:
         
         # Parse summary options
         summary_options_data = data.get('default_summary_options', {})
+
+        # Read model: try new field name first, fall back to old for backward compatibility
+        model = summary_options_data.get('summarization_model')
+        if not model:
+            model = summary_options_data.get('claude_model')  # Backward compatibility
+        if not model:
+            model = DEFAULT_SUMMARIZATION_MODEL
+
         summary_options = SummaryOptions(
             summary_length=SummaryLength(summary_options_data.get('summary_length', 'detailed')),
             include_bots=summary_options_data.get('include_bots', False),
             include_attachments=summary_options_data.get('include_attachments', True),
             excluded_users=summary_options_data.get('excluded_users', []),
             min_messages=summary_options_data.get('min_messages', 5),
-            claude_model=summary_options_data.get('claude_model', 'claude-3-sonnet-20240229'),
+            summarization_model=model,
             temperature=summary_options_data.get('temperature', 0.3),
             max_tokens=summary_options_data.get('max_tokens', 4000)
         )

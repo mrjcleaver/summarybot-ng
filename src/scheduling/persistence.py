@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..models.task import ScheduledTask, ScheduleType, Destination, DestinationType
 from ..models.summary import SummaryOptions, SummaryLength
+from ..config.constants import DEFAULT_SUMMARIZATION_MODEL
 from ..exceptions import ConfigurationError, create_error_context
 
 logger = logging.getLogger(__name__)
@@ -184,7 +185,7 @@ class TaskPersistence:
                 "include_attachments": task.summary_options.include_attachments,
                 "excluded_users": task.summary_options.excluded_users,
                 "min_messages": task.summary_options.min_messages,
-                "claude_model": task.summary_options.claude_model,
+                "claude_model": task.summary_options.summarization_model,
                 "temperature": task.summary_options.temperature,
                 "max_tokens": task.summary_options.max_tokens,
                 "extract_action_items": task.summary_options.extract_action_items,
@@ -231,7 +232,7 @@ class TaskPersistence:
             include_attachments=summary_opts_data.get("include_attachments", True),
             excluded_users=summary_opts_data.get("excluded_users", []),
             min_messages=summary_opts_data.get("min_messages", 5),
-            claude_model=summary_opts_data.get("claude_model", "claude-3-sonnet-20240229"),
+            claude_model=summary_opts_data.get("claude_model", DEFAULT_SUMMARIZATION_MODEL),
             temperature=summary_opts_data.get("temperature", 0.3),
             max_tokens=summary_opts_data.get("max_tokens", 4000),
             extract_action_items=summary_opts_data.get("extract_action_items", True),

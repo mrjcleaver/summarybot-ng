@@ -6,9 +6,10 @@ import os
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 from .settings import (
-    BotConfig, GuildConfig, SummaryOptions, PermissionSettings, 
+    BotConfig, GuildConfig, SummaryOptions, PermissionSettings,
     DatabaseConfig, CacheConfig, WebhookConfig, LogLevel, SummaryLength
 )
+from .constants import DEFAULT_SUMMARIZATION_MODEL
 
 
 class EnvironmentLoader:
@@ -138,13 +139,20 @@ class EnvironmentLoader:
         except ValueError:
             pass  # Use default
         
+        # Read model from environment (try new name first, fall back to legacy)
+        model = os.getenv(f'{prefix}MODEL')  # Try new SUMMARY_MODEL or SUMMARIZATION_MODEL
+        if not model:
+            model = os.getenv(f'{prefix}CLAUDE_MODEL')  # Legacy fallback
+        if not model:
+            model = DEFAULT_SUMMARIZATION_MODEL
+
         default_summary_options = SummaryOptions(
             summary_length=summary_length,
             include_bots=os.getenv(f'{prefix}INCLUDE_BOTS', 'false').lower() == 'true',
             include_attachments=os.getenv(f'{prefix}INCLUDE_ATTACHMENTS', 'true').lower() == 'true',
             excluded_users=EnvironmentLoader._parse_list(os.getenv(f'{prefix}EXCLUDED_USERS', '')),
             min_messages=int(os.getenv(f'{prefix}MIN_MESSAGES', '5')),
-            claude_model=os.getenv(f'{prefix}CLAUDE_MODEL', 'claude-3-sonnet-20240229'),
+            summarization_model=model,
             temperature=float(os.getenv(f'{prefix}TEMPERATURE', '0.3')),
             max_tokens=int(os.getenv(f'{prefix}MAX_TOKENS', '4000'))
         )

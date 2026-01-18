@@ -3,12 +3,16 @@ Summary-related data models.
 """
 
 import os
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
 from .base import BaseModel, generate_id, utc_now
+from ..config.constants import DEFAULT_SUMMARIZATION_MODEL, DEFAULT_BRIEF_MODEL
+
+logger = logging.getLogger(__name__)
 
 
 class SummaryLength(Enum):
@@ -252,8 +256,27 @@ class SummaryResult(BaseModel):
 
 
 def _get_default_model() -> str:
-    """Get default Claude model from environment or use fallback."""
-    return os.getenv('SUMMARY_CLAUDE_MODEL', 'claude-3-sonnet-20240229')
+    """Get default summarization model from environment or use fallback.
+
+    Checks SUMMARIZATION_MODEL first, then falls back to legacy SUMMARY_CLAUDE_MODEL
+    for backward compatibility, and finally uses the constant default.
+    """
+    # Try new environment variable name first
+    model = os.getenv('SUMMARIZATION_MODEL')
+    if model:
+        return model
+
+    # Fall back to legacy environment variable name
+    legacy_model = os.getenv('SUMMARY_CLAUDE_MODEL')
+    if legacy_model:
+        logger.warning(
+            "Using deprecated environment variable 'SUMMARY_CLAUDE_MODEL'. "
+            "Please rename to 'SUMMARIZATION_MODEL'."
+        )
+        return legacy_model
+
+    # Use constant default
+    return DEFAULT_SUMMARIZATION_MODEL
 
 
 @dataclass
@@ -265,7 +288,7 @@ class SummaryOptions(BaseModel):
     include_attachments: bool = True
     excluded_users: List[str] = field(default_factory=list)
     min_messages: int = 5
-    claude_model: str = field(default_factory=_get_default_model)
+    summarization_model: str = field(default_factory=_get_default_model)
     temperature: float = 0.3
     max_tokens: int = 4000
     extract_action_items: bool = True
@@ -309,7 +332,7 @@ class SummaryOptions(BaseModel):
 
     def get_model_for_length(self) -> str:
         """
-        Get the appropriate Claude model based on summary length.
+        Get the appropriate model based on summary length.
 
         For BRIEF summaries, automatically use Haiku for speed and cost efficiency.
         For DETAILED/COMPREHENSIVE summaries, use the configured model.
@@ -318,7 +341,7 @@ class SummaryOptions(BaseModel):
             Model identifier string (e.g., 'claude-3-haiku-20240307')
         """
         if self.summary_length == SummaryLength.BRIEF:
-            return "claude-3-haiku-20240307"
+            return DEFAULT_BRIEF_MODEL
 
         # For detailed and comprehensive, use configured model
-        return self.claude_model
+        return self.summarization_model
