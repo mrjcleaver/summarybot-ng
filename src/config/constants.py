@@ -4,16 +4,18 @@ Single source of truth for all default values.
 """
 
 # Model Configuration
-DEFAULT_SUMMARIZATION_MODEL = "openrouter/auto"
+# Note: Using Haiku as default since it's reliably available on OpenRouter
+# Users can configure other models via SUMMARIZATION_MODEL env var or /config command
+DEFAULT_SUMMARIZATION_MODEL = "claude-3-haiku-20240307"
 DEFAULT_BRIEF_MODEL = "claude-3-haiku-20240307"
 
 # Valid model choices
+# Note: Only include models verified to work on OpenRouter
 VALID_MODELS = [
     "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
     "claude-3-haiku-20240307",
     "claude-3-5-sonnet-20240620",
-    "openrouter/auto"
+    "claude-3-5-sonnet-20241022"
 ]
 
 # Model aliases for backward compatibility
