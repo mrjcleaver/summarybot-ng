@@ -230,6 +230,13 @@ class ClaudeClient:
                 # Process successful response (use normalized model name)
                 claude_response = self._process_response(response, normalized_model)
 
+                # Log successful response with actual model used
+                logger.info(
+                    f"Summary created successfully: model={claude_response.model}, "
+                    f"tokens={claude_response.input_tokens} in + {claude_response.output_tokens} out, "
+                    f"cost=${self._calculate_cost(claude_response):.4f}"
+                )
+
                 # Update usage stats
                 cost = self._calculate_cost(claude_response)
                 self.usage_stats.add_request(claude_response, cost)
@@ -425,7 +432,7 @@ class ClaudeClient:
                 content = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content[0])
             else:
                 content = str(response.content)
-        
+
         # Extract usage information
         usage = {}
         if hasattr(response, 'usage'):
@@ -433,10 +440,19 @@ class ClaudeClient:
                 "input_tokens": getattr(response.usage, 'input_tokens', 0),
                 "output_tokens": getattr(response.usage, 'output_tokens', 0)
             }
-        
+
+        # Get actual model used (OpenRouter returns this in response.model)
+        # This is especially important for openrouter/auto which routes to different models
+        actual_model = getattr(response, 'model', model)
+
+        # Log if actual model differs from requested (e.g., with openrouter/auto)
+        if actual_model != model:
+            logger = logging.getLogger(__name__)
+            logger.info(f"Model routing: requested={model}, actual={actual_model}")
+
         return ClaudeResponse(
             content=content,
-            model=model,
+            model=actual_model,  # Use actual model from response
             usage=usage,
             stop_reason=getattr(response, 'stop_reason', 'end_turn'),
             response_id=getattr(response, 'id', '')
