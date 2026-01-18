@@ -212,13 +212,15 @@ class ClaudeClient:
         logger.info(f"ClaudeClient: Original model={options.model}, Normalized model={normalized_model}, Is OpenRouter={self.is_openrouter}")
 
         # Validate model (check base model name without provider prefix)
-        base_model = options.model.replace('anthropic/', '')
-        if base_model not in self.MODEL_COSTS:
-            available_models = ", ".join(self.MODEL_COSTS.keys())
-            raise ModelUnavailableError(
-                options.model,
-                context={"available_models": available_models}
-            )
+        # Skip validation for openrouter/* models (they use dynamic routing)
+        if not options.model.startswith('openrouter/'):
+            base_model = options.model.replace('anthropic/', '')
+            if base_model not in self.MODEL_COSTS:
+                available_models = ", ".join(self.MODEL_COSTS.keys())
+                raise ModelUnavailableError(
+                    options.model,
+                    context={"available_models": available_models}
+                )
 
         # Prepare request parameters with normalized model
         request_params = self._build_request_params(prompt, system_prompt, options, normalized_model)
@@ -359,8 +361,12 @@ class ClaudeClient:
             model: Model name (with or without provider prefix)
 
         Returns:
-            Estimated cost in USD
+            Estimated cost in USD (0.0 for openrouter/* dynamic models)
         """
+        # OpenRouter dynamic models (openrouter/*) don't have fixed pricing
+        if model.startswith('openrouter/'):
+            return 0.0
+
         # Remove provider prefix for cost lookup
         base_model = model.replace('anthropic/', '')
 
