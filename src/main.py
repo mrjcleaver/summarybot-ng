@@ -36,6 +36,7 @@ from .command_handlers import (
 )
 from .scheduling import TaskScheduler
 from .scheduling.executor import TaskExecutor
+from .scheduling.persistence import TaskPersistence
 from .webhook_service import WebhookServer
 from .data import initialize_repositories, run_migrations
 from .logging import CommandLogger, CommandLogRepository, LoggingConfig
@@ -383,9 +384,13 @@ class SummaryBotApp:
             command_logger=self.command_logger  # Add command logging
         )
 
-        # Create task scheduler
+        # Create task persistence for surviving restarts
+        task_persistence = TaskPersistence(storage_path="data/tasks")
+
+        # Create task scheduler with persistence
         self.task_scheduler = TaskScheduler(
-            task_executor=task_executor
+            task_executor=task_executor,
+            persistence=task_persistence
         )
 
         # Initialize schedule command handler and add to bot services
