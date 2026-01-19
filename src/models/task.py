@@ -73,7 +73,8 @@ class ScheduledTask(BaseModel):
     """A scheduled summarization task."""
     id: str = field(default_factory=generate_id)
     name: str = ""
-    channel_id: str = ""
+    channel_id: str = ""  # Primary channel (backward compatibility)
+    channel_ids: List[str] = field(default_factory=list)  # Multiple channels for cross-channel summaries
     guild_id: str = ""
     task_type: TaskType = TaskType.SUMMARY
     schedule_type: ScheduleType = ScheduleType.DAILY
@@ -213,7 +214,7 @@ class ScheduledTask(BaseModel):
     def mark_run_failed(self) -> None:
         """Mark that a run failed."""
         self.failure_count += 1
-        
+
         # Disable task if too many failures
         if self.failure_count >= self.max_failures:
             self.is_active = False
@@ -221,6 +222,19 @@ class ScheduledTask(BaseModel):
             # Schedule retry
             retry_time = datetime.utcnow() + timedelta(minutes=self.retry_delay_minutes)
             self.next_run = retry_time
+
+    def get_all_channel_ids(self) -> List[str]:
+        """Get all channels for this task (supports both single and multi-channel)."""
+        if self.channel_ids:
+            return self.channel_ids
+        elif self.channel_id:
+            return [self.channel_id]
+        else:
+            return []
+
+    def is_cross_channel(self) -> bool:
+        """Check if this is a cross-channel summary task."""
+        return len(self.get_all_channel_ids()) > 1
     
     def get_schedule_description(self) -> str:
         """Get human-readable schedule description."""

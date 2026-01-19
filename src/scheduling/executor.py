@@ -81,37 +81,60 @@ class TaskExecutor:
         start_time = datetime.utcnow()
         task.mark_started()
 
-        logger.info(f"Executing summary task for channel {task.channel_id}")
+        channel_ids = task.get_all_channel_ids()
+        logger.info(f"Executing summary task for {len(channel_ids)} channel(s): {channel_ids}")
 
         try:
             # Get time range for messages
             start_msg_time, end_msg_time = task.get_time_range()
 
-            # Fetch and process messages
-            messages = await self.message_processor.process_channel_messages(
-                channel_id=task.channel_id,
-                start_time=start_msg_time,
-                end_time=end_msg_time,
-                options=task.summary_options
-            )
+            # Fetch and process messages from all channels
+            all_messages = []
+            channel_names = []
 
-            logger.info(f"Fetched {len(messages)} messages for summarization")
+            for channel_id in channel_ids:
+                channel_messages = await self.message_processor.process_channel_messages(
+                    channel_id=channel_id,
+                    start_time=start_msg_time,
+                    end_time=end_msg_time,
+                    options=task.summary_options
+                )
+                all_messages.extend(channel_messages)
+
+                # Try to get channel name from Discord client
+                if self.discord_client:
+                    try:
+                        channel = self.discord_client.get_channel(int(channel_id))
+                        if channel:
+                            channel_names.append(f"#{channel.name}")
+                        else:
+                            channel_names.append(f"Channel {channel_id}")
+                    except:
+                        channel_names.append(f"Channel {channel_id}")
+                else:
+                    channel_names.append(f"Channel {channel_id}")
+
+            # Sort messages by timestamp
+            all_messages.sort(key=lambda m: m.timestamp)
+
+            logger.info(f"Fetched {len(all_messages)} total messages from {len(channel_ids)} channel(s)")
 
             # Create summarization context
+            channel_display = ", ".join(channel_names) if task.is_cross_channel() else channel_names[0]
             context = SummarizationContext(
-                channel_name=f"Channel {task.channel_id}",  # Could be enhanced with actual name
+                channel_name=channel_display,
                 guild_name=f"Guild {task.guild_id}",
-                total_participants=len(set(msg.author_id for msg in messages)),
+                total_participants=len(set(msg.author_id for msg in all_messages)),
                 time_span_hours=task.time_range_hours,
-                message_types={"text": len(messages)}
+                message_types={"text": len(all_messages)}
             )
 
             # Generate summary
             summary_result = await self.summarization_engine.summarize_messages(
-                messages=messages,
+                messages=all_messages,
                 options=task.summary_options,
                 context=context,
-                channel_id=task.channel_id,
+                channel_id=task.channel_id,  # Primary channel for storage
                 guild_id=task.guild_id
             )
 

@@ -24,7 +24,7 @@ class SummaryTask:
     """Task for generating scheduled summaries."""
 
     scheduled_task: ScheduledTask
-    channel_id: str
+    channel_id: str  # Primary channel (backward compatibility)
     guild_id: str
     summary_options: SummaryOptions
     destinations: List[Destination] = field(default_factory=list)
@@ -36,6 +36,14 @@ class SummaryTask:
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
     retry_count: int = 0
+
+    def get_all_channel_ids(self) -> List[str]:
+        """Get all channels for this task (supports cross-channel summaries)."""
+        return self.scheduled_task.get_all_channel_ids()
+
+    def is_cross_channel(self) -> bool:
+        """Check if this is a cross-channel summary."""
+        return self.scheduled_task.is_cross_channel()
 
     def get_time_range(self) -> tuple[datetime, datetime]:
         """Get the time range for message fetching."""

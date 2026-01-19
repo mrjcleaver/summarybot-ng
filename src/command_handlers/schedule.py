@@ -97,17 +97,19 @@ class ScheduleCommandHandler(BaseCommandHandler):
                                     frequency: str,
                                     time_of_day: Optional[str] = None,
                                     length: str = "detailed",
-                                    days: Optional[str] = None) -> None:
+                                    days: Optional[str] = None,
+                                    additional_channels: Optional[str] = None) -> None:
         """
         Create a new scheduled summary.
 
         Args:
             interaction: Discord interaction object
-            channel: Target channel for summaries
+            channel: Primary channel for summaries
             frequency: Schedule frequency (daily, weekly, half-weekly, monthly)
             time_of_day: Time to generate summary (HH:MM format)
             length: Summary length
             days: Specific days for half-weekly (e.g., "mon,wed,fri,sun")
+            additional_channels: Additional channels for cross-channel summary (comma-separated)
         """
         try:
             # Check admin permission
@@ -190,14 +192,33 @@ class ScheduleCommandHandler(BaseCommandHandler):
                 enabled=True
             )
 
+            # Parse additional channels for cross-channel summaries
+            all_channel_ids = [str(channel.id)]  # Start with primary channel
+            if additional_channels:
+                import re
+                # Extract channel IDs from mentions (#channel) or raw IDs
+                channel_pattern = r'<#(\d+)>|(\d{17,20})'
+                matches = re.findall(channel_pattern, additional_channels)
+                for mention_id, raw_id in matches:
+                    channel_id = mention_id or raw_id
+                    if channel_id and channel_id not in all_channel_ids:
+                        all_channel_ids.append(channel_id)
+
             # Create summary options
             summary_opts = SummaryOptions(summary_length=summary_length)
 
+            # Create task name based on number of channels
+            if len(all_channel_ids) > 1:
+                task_name = f"{frequency.capitalize()} cross-channel summary ({len(all_channel_ids)} channels)"
+            else:
+                task_name = f"{frequency.capitalize()} summary for #{channel.name}"
+
             # Create scheduled task
             task = ScheduledTask(
-                name=f"{frequency.capitalize()} summary for #{channel.name}",
+                name=task_name,
                 guild_id=str(interaction.guild_id),
-                channel_id=str(channel.id),
+                channel_id=str(channel.id),  # Primary channel
+                channel_ids=all_channel_ids,  # All channels including primary
                 task_type=TaskType.SUMMARY,
                 schedule_type=schedule_type,
                 schedule_time=schedule_time.strftime('%H:%M') if schedule_time else None,
@@ -220,12 +241,20 @@ class ScheduleCommandHandler(BaseCommandHandler):
             if schedule_time:
                 schedule_desc += f" at {schedule_time.strftime('%H:%M')} UTC"
 
+            # Create response with channel info
+            if len(all_channel_ids) > 1:
+                channel_list = ", ".join([f"<#{cid}>" for cid in all_channel_ids])
+                description = f"Automatic cross-channel summaries will be posted to {channel.mention}\n**Channels:** {channel_list}"
+            else:
+                description = f"Automatic summaries will be posted to {channel.mention}"
+
             embed = format_success_response(
                 title="Scheduled Summary Created",
-                description=f"Automatic summaries will be posted to {channel.mention}",
+                description=description,
                 fields={
                     "Schedule": schedule_desc,
                     "Length": summary_length.value.capitalize(),
+                    "Channels": f"{len(all_channel_ids)} channel(s)",
                     "Task ID": task_id,
                     "Status": "Active"
                 }
@@ -287,8 +316,25 @@ class ScheduleCommandHandler(BaseCommandHandler):
             )
 
             for i, task in enumerate(summary_tasks[:10], 1):  # Limit to 10
-                channel = interaction.guild.get_channel(int(task.channel_id))
-                channel_name = channel.mention if channel else f"Channel {task.channel_id}"
+                # Get channel info (support cross-channel)
+                channel_ids = task.get_all_channel_ids()
+                if len(channel_ids) > 1:
+                    # Cross-channel summary
+                    channel_mentions = []
+                    for cid in channel_ids[:3]:  # Show first 3
+                        try:
+                            ch = interaction.guild.get_channel(int(cid))
+                            channel_mentions.append(ch.mention if ch else f"`{cid}`")
+                        except:
+                            channel_mentions.append(f"`{cid}`")
+                    channel_name = ", ".join(channel_mentions)
+                    if len(channel_ids) > 3:
+                        channel_name += f" +{len(channel_ids) - 3} more"
+                    channel_name = f"🔀 {channel_name}"  # Icon for cross-channel
+                else:
+                    # Single channel
+                    channel = interaction.guild.get_channel(int(task.channel_id))
+                    channel_name = channel.mention if channel else f"Channel {task.channel_id}"
 
                 # Use the built-in schedule description method
                 schedule_desc = task.get_schedule_description()
