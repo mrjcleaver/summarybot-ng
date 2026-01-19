@@ -147,10 +147,14 @@ class ResponseParser:
             json_str = self._extract_json_with_brace_counting(content)
 
         if not json_str:
+            logger.debug("No JSON found in response")
             return None
-        
+
+        logger.debug(f"Extracted JSON string (length={len(json_str)})")
+
         try:
             data = json.loads(json_str)
+            logger.debug(f"Successfully parsed JSON with {len(data)} top-level keys")
 
             # Extract components - support multiple format variations
             summary_text = (
@@ -255,7 +259,12 @@ class ResponseParser:
             )
             
         except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {str(e)}")
+            logger.error(f"Failed JSON string (first 500 chars): {json_str[:500]}")
+            logger.error(f"Failed JSON string (last 500 chars): {json_str[-500:]}")
             metadata["warnings"].append(f"JSON parse error: {str(e)}")
+            metadata["json_extract_length"] = len(json_str)
+            metadata["json_preview"] = json_str[:200]
             return None
     
     def _parse_markdown_response(self, content: str, metadata: Dict[str, Any]) -> Optional[ParsedSummary]:
@@ -315,25 +324,35 @@ class ResponseParser:
     def _parse_freeform_response(self, content: str, metadata: Dict[str, Any]) -> Optional[ParsedSummary]:
         """Parse freeform text response as fallback."""
         metadata["parsing_method"] = "freeform"
-        
-        # Use the entire content as summary text
-        summary_text = content.strip()
-        
+        logger.warning("Falling back to freeform parser - JSON/Markdown parsing failed")
+
+        # Strip code blocks to avoid embedding raw JSON/code
+        # Remove ```json ... ``` or ``` ... ``` blocks
+        cleaned_content = re.sub(r'```(?:json)?\s*.*?\s*```', '', content, flags=re.DOTALL)
+
+        # Use the cleaned content as summary text
+        summary_text = cleaned_content.strip()
+
+        # If nothing left after stripping code blocks, try to extract from original
+        if not summary_text:
+            logger.warning("Content was entirely code blocks, using original")
+            summary_text = content.strip()
+
         # Try to extract some structure with simple heuristics
-        lines = content.split('\n')
+        lines = summary_text.split('\n')
         key_points = []
-        
+
         for line in lines:
             line = line.strip()
             # Look for bullet points or numbered lists
             if re.match(r'^[-*•]\s+|^\d+\.\s+', line):
                 key_points.append(re.sub(r'^[-*•]\s+|^\d+\.\s+', '', line))
-        
+
         # If no bullet points found, split summary into sentences as key points
         if not key_points and summary_text:
             sentences = re.split(r'[.!?]+', summary_text)
             key_points = [s.strip() for s in sentences if len(s.strip()) > 10][:5]
-        
+
         return ParsedSummary(
             summary_text=summary_text,
             key_points=key_points,
