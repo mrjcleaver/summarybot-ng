@@ -92,6 +92,12 @@ class ScheduledTask(BaseModel):
     failure_count: int = 0
     max_failures: int = 3
     retry_delay_minutes: int = 5
+
+    # Category support
+    category_id: Optional[str] = None  # Discord category ID for category-based summaries
+    excluded_channel_ids: List[str] = field(default_factory=list)  # Channels to exclude from category
+    category_mode: str = "combined"  # "combined" (one summary) or "individual" (per-channel summaries)
+    resolve_category_at_runtime: bool = False  # Resolve category channels at execution time vs creation time
     
     def calculate_next_run(self, from_time: Optional[datetime] = None) -> Optional[datetime]:
         """Calculate the next run time for this task."""
@@ -235,6 +241,25 @@ class ScheduledTask(BaseModel):
     def is_cross_channel(self) -> bool:
         """Check if this is a cross-channel summary task."""
         return len(self.get_all_channel_ids()) > 1
+
+    def is_category_summary(self) -> bool:
+        """Check if this is a category-based summary."""
+        return self.category_id is not None
+
+    def should_resolve_runtime(self) -> bool:
+        """Check if category channels should be resolved at execution time."""
+        return self.is_category_summary() and self.resolve_category_at_runtime
+
+    def get_filtered_channel_ids(self, all_channel_ids: List[str]) -> List[str]:
+        """Get channel IDs with exclusions applied.
+
+        Args:
+            all_channel_ids: Full list of channel IDs
+
+        Returns:
+            Filtered list of channel IDs with exclusions removed
+        """
+        return [cid for cid in all_channel_ids if cid not in self.excluded_channel_ids]
     
     def get_schedule_description(self) -> str:
         """Get human-readable schedule description."""

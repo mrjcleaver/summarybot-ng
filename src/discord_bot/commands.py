@@ -46,7 +46,10 @@ class CommandRegistry:
             minutes="Summarize messages from the last N minutes",
             length="Summary length (default: detailed)",
             perspective="Perspective/audience for the summary (default: general)",
-            channel="Channel to summarize (requires special role for cross-channel access)"
+            channel="Single channel to summarize (mutually exclusive with category)",
+            category="Category to summarize all channels from (mutually exclusive with channel)",
+            mode="For category: 'combined' (one summary) or 'individual' (per-channel summaries)",
+            exclude_channels="Comma-separated channel IDs or mentions to exclude from category"
         )
         @discord.app_commands.choices(
             length=[
@@ -71,10 +74,22 @@ class CommandRegistry:
             minutes: Optional[int] = None,
             length: Optional[str] = "detailed",
             perspective: Optional[str] = "general",
-            channel: Optional[discord.TextChannel] = None
+            channel: Optional[discord.TextChannel] = None,
+            category: Optional[discord.CategoryChannel] = None,
+            mode: Optional[str] = "combined",
+            exclude_channels: Optional[str] = None
         ):
             """Summarize recent channel messages."""
-            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, target={channel.id if channel else 'current'}, messages={messages}, hours={hours}, minutes={minutes}, length={length}, perspective={perspective}")
+            logger.info(f"🎯 SUMMARIZE COMMAND CALLED: user={interaction.user}, guild={interaction.guild_id}, channel={interaction.channel_id}, target_channel={channel.id if channel else 'current'}, category={category.id if category else None}, mode={mode}, messages={messages}, hours={hours}, minutes={minutes}, length={length}, perspective={perspective}")
+
+            # Validate mutual exclusivity
+            if channel and category:
+                await interaction.response.send_message(
+                    "❌ Please specify either a channel OR a category, not both.",
+                    ephemeral=True
+                )
+                return
+
             # Defer response since summarization takes time
             await interaction.response.defer(ephemeral=False)
 
@@ -96,7 +111,10 @@ class CommandRegistry:
                     minutes=minutes,
                     length=length,
                     perspective=perspective,
-                    channel=channel
+                    channel=channel,
+                    category=category,
+                    mode=mode,
+                    exclude_channels=exclude_channels
                 )
 
             except Exception as e:

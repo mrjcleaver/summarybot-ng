@@ -45,6 +45,14 @@ class SummaryTask:
         """Check if this is a cross-channel summary."""
         return self.scheduled_task.is_cross_channel()
 
+    def is_category_summary(self) -> bool:
+        """Check if this is a category-based summary."""
+        return self.scheduled_task.is_category_summary()
+
+    def should_resolve_runtime(self) -> bool:
+        """Check if category channels should be resolved at execution time."""
+        return self.scheduled_task.should_resolve_runtime()
+
     def get_time_range(self) -> tuple[datetime, datetime]:
         """Get the time range for message fetching."""
         # Use timezone-aware datetimes to match Discord message timestamps

@@ -81,8 +81,168 @@ class TaskExecutor:
         start_time = datetime.utcnow()
         task.mark_started()
 
+        # Check if this is a category task that needs runtime resolution
+        if task.should_resolve_runtime():
+            await self._resolve_category_channels_runtime(task)
+
+        # Check if this is individual mode
+        if task.is_category_summary() and task.scheduled_task.category_mode == "individual":
+            return await self._execute_individual_mode(task, start_time)
+
+        # Otherwise execute combined mode (default)
+        return await self._execute_combined_mode(task, start_time)
+
+    async def _resolve_category_channels_runtime(self, task: SummaryTask) -> None:
+        """Resolve category channels at runtime.
+
+        Args:
+            task: Summary task with category to resolve
+        """
+        if not self.discord_client:
+            raise MessageFetchError("Discord client not available for category resolution")
+
+        category_id = task.scheduled_task.category_id
+        category = self.discord_client.get_channel(int(category_id))
+
+        if not isinstance(category, discord.CategoryChannel):
+            raise MessageFetchError(f"Category {category_id} not found or not accessible")
+
+        # Get text channels from category, excluding specified channels
+        excluded = set(task.scheduled_task.excluded_channel_ids)
+        channels = [
+            ch for ch in category.text_channels
+            if str(ch.id) not in excluded
+        ]
+
+        # Update task's channel_ids for this execution
+        task.scheduled_task.channel_ids = [str(ch.id) for ch in channels]
+
+        logger.info(f"Resolved category {category.name} to {len(channels)} channels at runtime")
+
+    async def _execute_individual_mode(self, task: SummaryTask, start_time: datetime) -> TaskExecutionResult:
+        """Execute task in individual mode - separate summaries per channel.
+
+        Args:
+            task: Summary task
+            start_time: Execution start time
+
+        Returns:
+            Task execution result
+        """
         channel_ids = task.get_all_channel_ids()
-        logger.info(f"Executing summary task for {len(channel_ids)} channel(s): {channel_ids}")
+        logger.info(f"Executing individual mode for {len(channel_ids)} channels")
+
+        results = []
+        summaries_created = []
+
+        for channel_id in channel_ids:
+            try:
+                # Create single-channel task
+                single_task_data = task.scheduled_task
+                single_task_data.channel_id = channel_id
+                single_task_data.channel_ids = [channel_id]
+
+                # Get time range for messages
+                start_msg_time, end_msg_time = task.get_time_range()
+
+                # Fetch and process messages
+                channel_messages = await self.message_processor.process_channel_messages(
+                    channel_id=channel_id,
+                    start_time=start_msg_time,
+                    end_time=end_msg_time,
+                    options=task.summary_options
+                )
+
+                if len(channel_messages) < task.summary_options.min_messages:
+                    logger.warning(f"Channel {channel_id}: insufficient messages ({len(channel_messages)} < {task.summary_options.min_messages})")
+                    results.append({"channel_id": channel_id, "success": False, "error": "Insufficient messages"})
+                    continue
+
+                # Get channel name
+                channel_name = f"Channel {channel_id}"
+                if self.discord_client:
+                    try:
+                        channel = self.discord_client.get_channel(int(channel_id))
+                        if channel:
+                            channel_name = f"#{channel.name}"
+                    except:
+                        pass
+
+                # Create summarization context
+                context = SummarizationContext(
+                    channel_name=channel_name,
+                    guild_name=f"Guild {task.guild_id}",
+                    total_participants=len(set(msg.author_id for msg in channel_messages)),
+                    time_span_hours=task.time_range_hours,
+                    message_types={"text": len(channel_messages)}
+                )
+
+                # Generate summary
+                summary_result = await self.summarization_engine.summarize_messages(
+                    messages=channel_messages,
+                    options=task.summary_options,
+                    context=context,
+                    channel_id=channel_id,
+                    guild_id=task.guild_id
+                )
+
+                logger.info(f"Generated summary {summary_result.id} for channel {channel_id}")
+
+                # Deliver to channel
+                if self.discord_client:
+                    try:
+                        channel = self.discord_client.get_channel(int(channel_id))
+                        if channel:
+                            embed_dict = summary_result.to_embed_dict()
+                            embed = discord.Embed.from_dict(embed_dict)
+                            await channel.send(embed=embed)
+                            results.append({"channel_id": channel_id, "success": True, "summary_id": summary_result.id})
+                            summaries_created.append(summary_result)
+                    except Exception as e:
+                        logger.error(f"Failed to deliver summary to channel {channel_id}: {e}")
+                        results.append({"channel_id": channel_id, "success": False, "error": str(e)})
+                else:
+                    results.append({"channel_id": channel_id, "success": True, "summary_id": summary_result.id})
+                    summaries_created.append(summary_result)
+
+            except InsufficientContentError as e:
+                logger.warning(f"Insufficient content for channel {channel_id}: {e}")
+                results.append({"channel_id": channel_id, "success": False, "error": str(e)})
+
+            except Exception as e:
+                logger.exception(f"Failed to summarize channel {channel_id}: {e}")
+                results.append({"channel_id": channel_id, "success": False, "error": str(e)})
+
+        # Mark task based on results
+        success_count = sum(1 for r in results if r["success"])
+
+        if success_count > 0:
+            task.mark_completed()
+        else:
+            task.mark_failed(f"Failed to generate summaries for all {len(channel_ids)} channels")
+
+        execution_time = (datetime.utcnow() - start_time).total_seconds()
+
+        return TaskExecutionResult(
+            task_id=task.scheduled_task.id,
+            success=success_count > 0,
+            summary_result=summaries_created[0] if summaries_created else None,
+            delivery_results=results,
+            execution_time_seconds=execution_time
+        )
+
+    async def _execute_combined_mode(self, task: SummaryTask, start_time: datetime) -> TaskExecutionResult:
+        """Execute task in combined mode - single summary (existing logic).
+
+        Args:
+            task: Summary task
+            start_time: Execution start time
+
+        Returns:
+            Task execution result
+        """
+        channel_ids = task.get_all_channel_ids()
+        logger.info(f"Executing combined mode for {len(channel_ids)} channel(s): {channel_ids}")
 
         try:
             # Get time range for messages
@@ -120,7 +280,7 @@ class TaskExecutor:
             logger.info(f"Fetched {len(all_messages)} total messages from {len(channel_ids)} channel(s)")
 
             # Create summarization context
-            channel_display = ", ".join(channel_names) if task.is_cross_channel() else channel_names[0]
+            channel_display = ", ".join(channel_names) if task.is_cross_channel() or task.is_category_summary() else channel_names[0]
             context = SummarizationContext(
                 channel_name=channel_display,
                 guild_name=f"Guild {task.guild_id}",

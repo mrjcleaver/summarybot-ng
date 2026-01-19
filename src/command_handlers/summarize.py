@@ -3,6 +3,7 @@ Summarization command handlers for Discord slash commands.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Optional, List
 import discord
@@ -26,6 +27,45 @@ from ..exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_category_channels(
+    category: discord.CategoryChannel,
+    excluded_channel_ids: Optional[List[str]] = None
+) -> List[discord.TextChannel]:
+    """Resolve a category to its text channels, applying exclusions.
+
+    Args:
+        category: Discord category channel
+        excluded_channel_ids: List of channel IDs to exclude
+
+    Returns:
+        List of text channels in the category
+    """
+    excluded = set(excluded_channel_ids or [])
+    channels = [
+        ch for ch in category.text_channels
+        if str(ch.id) not in excluded
+    ]
+    return channels
+
+
+def parse_exclude_channels(exclude_string: Optional[str]) -> List[str]:
+    """Parse excluded channels from comma-separated mentions or IDs.
+
+    Args:
+        exclude_string: Comma-separated channel mentions (#channel) or IDs
+
+    Returns:
+        List of channel IDs
+    """
+    if not exclude_string:
+        return []
+
+    # Extract channel IDs from mentions (<#123>) or raw IDs
+    channel_pattern = r'<#(\d+)>|(\d{17,20})'
+    matches = re.findall(channel_pattern, exclude_string)
+    return [mention_id or raw_id for mention_id, raw_id in matches]
 
 
 class SummarizeCommandHandler(BaseCommandHandler):
@@ -76,7 +116,10 @@ class SummarizeCommandHandler(BaseCommandHandler):
         minutes: Optional[int] = None,
         length: Optional[str] = "detailed",
         perspective: Optional[str] = "general",
-        channel: Optional[discord.TextChannel] = None
+        channel: Optional[discord.TextChannel] = None,
+        category: Optional[discord.CategoryChannel] = None,
+        mode: Optional[str] = "combined",
+        exclude_channels: Optional[str] = None
     ) -> None:
         """
         Handle /summarize slash command interaction.
@@ -91,8 +134,38 @@ class SummarizeCommandHandler(BaseCommandHandler):
             length: Summary length (brief, detailed, comprehensive)
             perspective: Perspective/audience (general, developer, marketing, etc.)
             channel: Target channel to summarize (optional, defaults to current channel)
+            category: Target category to summarize (mutually exclusive with channel)
+            mode: For category: "combined" or "individual" mode
+            exclude_channels: Comma-separated channel IDs or mentions to exclude
         """
         try:
+            # Route to category handler if category is specified
+            if category:
+                excluded_channel_ids = parse_exclude_channels(exclude_channels)
+
+                if mode == "individual":
+                    await self.handle_category_individual_summary(
+                        interaction,
+                        category=category,
+                        excluded_channel_ids=excluded_channel_ids,
+                        messages=messages,
+                        hours=hours,
+                        minutes=minutes,
+                        length=length,
+                        perspective=perspective
+                    )
+                else:  # combined mode
+                    await self.handle_category_combined_summary(
+                        interaction,
+                        category=category,
+                        excluded_channel_ids=excluded_channel_ids,
+                        messages=messages,
+                        hours=hours,
+                        minutes=minutes,
+                        length=length,
+                        perspective=perspective
+                    )
+                return
             # Determine target channel
             target_channel = channel or interaction.channel
 
@@ -641,6 +714,265 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 raw_messages.append(message)
 
         return await self._process_messages(raw_messages, options)
+
+    async def handle_category_combined_summary(
+        self,
+        interaction: discord.Interaction,
+        category: discord.CategoryChannel,
+        excluded_channel_ids: List[str],
+        messages: Optional[int] = None,
+        hours: Optional[int] = None,
+        minutes: Optional[int] = None,
+        length: str = "detailed",
+        perspective: str = "general"
+    ) -> None:
+        """Handle category summary in combined mode (one summary for all channels).
+
+        Args:
+            interaction: Discord interaction
+            category: Discord category to summarize
+            excluded_channel_ids: List of channel IDs to exclude
+            messages: Number of messages to summarize
+            hours: Hours of messages to look back
+            minutes: Minutes of messages to look back
+            length: Summary length
+            perspective: Summary perspective
+        """
+        try:
+            # Permission check - reuse cross_channel_summary_role_name
+            if self.config_manager:
+                bot_config = self.config_manager.get_current_config()
+                if bot_config:
+                    guild_config = bot_config.get_guild_config(str(interaction.guild_id))
+                    required_role = guild_config.cross_channel_summary_role_name
+
+                    if required_role:
+                        user_member = interaction.guild.get_member(interaction.user.id)
+                        has_role = any(role.name == required_role for role in user_member.roles)
+
+                        if not has_role:
+                            await interaction.followup.send(
+                                f"❌ You need the **{required_role}** role to summarize categories.",
+                                ephemeral=True
+                            )
+                            return
+
+            # Resolve category to channels
+            channels = resolve_category_channels(category, excluded_channel_ids)
+
+            if not channels:
+                await interaction.followup.send(
+                    f"❌ No accessible text channels found in category '{category.name}'.",
+                    ephemeral=True
+                )
+                return
+
+            logger.info(f"Category combined summary: {category.name} with {len(channels)} channels")
+
+            # Fetch messages from all channels
+            all_messages = []
+
+            for ch in channels:
+                try:
+                    if messages:
+                        raw_messages = await self.fetch_messages(ch, limit=messages)
+                    elif hours or minutes:
+                        total_hours = (hours or 0) + (minutes or 0) / 60
+                        time_delta = timedelta(hours=total_hours if total_hours > 0 else 24)
+                        raw_messages = await self.fetch_recent_messages(ch, time_delta)
+                    else:
+                        raw_messages = await self.fetch_messages(ch, limit=100)
+
+                    all_messages.extend(raw_messages)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch messages from #{ch.name}: {e}")
+                    continue
+
+            # Sort messages chronologically
+            all_messages.sort(key=lambda m: m.created_at)
+
+            # Process messages
+            summary_length_enum = SummaryLength(length)
+            summary_options = SummaryOptions(
+                summary_length=summary_length_enum,
+                perspective=perspective,
+                include_bots=False
+            )
+            processed_messages = await self._process_messages(all_messages, summary_options)
+
+            if len(processed_messages) < summary_options.min_messages:
+                raise InsufficientContentError(
+                    message_count=len(processed_messages),
+                    min_required=summary_options.min_messages
+                )
+
+            # Create summarization context
+            channel_names = ", ".join([f"#{ch.name}" for ch in channels])
+            time_span = (hours or 0) + (minutes or 0) / 60 if not messages else 0
+            context = SummarizationContext(
+                channel_name=f"Category: {category.name} ({channel_names})",
+                guild_name=interaction.guild.name,
+                total_participants=len(set(msg.author_id for msg in processed_messages)),
+                time_span_hours=time_span
+            )
+
+            # Generate summary
+            summary_result = await self.summarization_engine.summarize_messages(
+                messages=processed_messages,
+                options=summary_options,
+                context=context,
+                channel_id=str(category.id),
+                guild_id=str(interaction.guild_id)
+            )
+
+            # Send summary as embed
+            summary_embed_dict = summary_result.to_embed_dict()
+            summary_embed = discord.Embed.from_dict(summary_embed_dict)
+
+            await interaction.followup.send(embed=summary_embed)
+
+            logger.info(f"Category combined summary completed for {category.name}")
+
+        except Exception as e:
+            logger.exception(f"Category combined summary failed: {e}")
+            await self.send_error_response(interaction, e)
+
+    async def handle_category_individual_summary(
+        self,
+        interaction: discord.Interaction,
+        category: discord.CategoryChannel,
+        excluded_channel_ids: List[str],
+        messages: Optional[int] = None,
+        hours: Optional[int] = None,
+        minutes: Optional[int] = None,
+        length: str = "detailed",
+        perspective: str = "general"
+    ) -> None:
+        """Handle category summary in individual mode (separate summaries per channel).
+
+        Args:
+            interaction: Discord interaction
+            category: Discord category to summarize
+            excluded_channel_ids: List of channel IDs to exclude
+            messages: Number of messages to summarize
+            hours: Hours of messages to look back
+            minutes: Minutes of messages to look back
+            length: Summary length
+            perspective: Summary perspective
+        """
+        try:
+            # Permission check
+            if self.config_manager:
+                bot_config = self.config_manager.get_current_config()
+                if bot_config:
+                    guild_config = bot_config.get_guild_config(str(interaction.guild_id))
+                    required_role = guild_config.cross_channel_summary_role_name
+
+                    if required_role:
+                        user_member = interaction.guild.get_member(interaction.user.id)
+                        has_role = any(role.name == required_role for role in user_member.roles)
+
+                        if not has_role:
+                            await interaction.followup.send(
+                                f"❌ You need the **{required_role}** role to summarize categories.",
+                                ephemeral=True
+                            )
+                            return
+
+            # Resolve category to channels
+            channels = resolve_category_channels(category, excluded_channel_ids)
+
+            if not channels:
+                await interaction.followup.send(
+                    f"❌ No accessible text channels found in category '{category.name}'.",
+                    ephemeral=True
+                )
+                return
+
+            logger.info(f"Category individual summary: {category.name} with {len(channels)} channels")
+
+            # Send initial status
+            await interaction.followup.send(
+                f"🔄 Generating individual summaries for {len(channels)} channels in **{category.name}**..."
+            )
+
+            # Generate summaries for each channel
+            results = []
+            for ch in channels:
+                try:
+                    # Fetch messages from this channel
+                    if messages:
+                        raw_messages = await self.fetch_messages(ch, limit=messages)
+                    elif hours or minutes:
+                        total_hours = (hours or 0) + (minutes or 0) / 60
+                        time_delta = timedelta(hours=total_hours if total_hours > 0 else 24)
+                        raw_messages = await self.fetch_recent_messages(ch, time_delta)
+                    else:
+                        raw_messages = await self.fetch_messages(ch, limit=100)
+
+                    # Process messages
+                    summary_length_enum = SummaryLength(length)
+                    summary_options = SummaryOptions(
+                        summary_length=summary_length_enum,
+                        perspective=perspective,
+                        include_bots=False
+                    )
+                    processed_messages = await self._process_messages(raw_messages, summary_options)
+
+                    if len(processed_messages) < summary_options.min_messages:
+                        logger.warning(f"#{ch.name}: insufficient messages ({len(processed_messages)} < {summary_options.min_messages})")
+                        results.append({"channel": ch, "success": False, "error": "Insufficient messages"})
+                        continue
+
+                    # Create summarization context
+                    time_span = (hours or 0) + (minutes or 0) / 60 if not messages else 0
+                    context = SummarizationContext(
+                        channel_name=ch.name,
+                        guild_name=interaction.guild.name,
+                        total_participants=len(set(msg.author_id for msg in processed_messages)),
+                        time_span_hours=time_span
+                    )
+
+                    # Generate summary
+                    summary_result = await self.summarization_engine.summarize_messages(
+                        messages=processed_messages,
+                        options=summary_options,
+                        context=context,
+                        channel_id=str(ch.id),
+                        guild_id=str(interaction.guild_id)
+                    )
+
+                    results.append({"channel": ch, "summary": summary_result, "success": True})
+
+                except Exception as e:
+                    logger.error(f"Failed to summarize #{ch.name}: {e}")
+                    results.append({"channel": ch, "success": False, "error": str(e)})
+
+            # Send consolidated response
+            success_count = sum(1 for r in results if r["success"])
+
+            await interaction.followup.send(
+                f"✅ Generated {success_count}/{len(channels)} summaries for category **{category.name}**"
+            )
+
+            # Post individual summaries to their respective channels
+            for result in results:
+                if result["success"]:
+                    ch = result["channel"]
+                    summary = result["summary"]
+                    embed_dict = summary.to_embed_dict()
+                    embed = discord.Embed.from_dict(embed_dict)
+
+                    try:
+                        await ch.send(embed=embed)
+                    except Exception as e:
+                        logger.error(f"Failed to post summary to #{ch.name}: {e}")
+
+            logger.info(f"Category individual summary completed for {category.name}: {success_count}/{len(channels)} successful")
+
+        except Exception as e:
+            logger.exception(f"Category individual summary failed: {e}")
+            await self.send_error_response(interaction, e)
 
     async def estimate_summary_cost(self,
                                    interaction: discord.Interaction,
