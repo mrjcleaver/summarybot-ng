@@ -3,7 +3,7 @@ Task definition classes for scheduled operations.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
@@ -47,7 +47,8 @@ class SummaryTask:
 
     def get_time_range(self) -> tuple[datetime, datetime]:
         """Get the time range for message fetching."""
-        end_time = datetime.utcnow()
+        # Use timezone-aware datetimes to match Discord message timestamps
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(hours=self.time_range_hours)
         return start_time, end_time
 
