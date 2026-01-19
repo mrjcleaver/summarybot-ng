@@ -137,19 +137,17 @@ class ResponseParser:
     def _parse_json_response(self, content: str, metadata: Dict[str, Any]) -> Optional[ParsedSummary]:
         """Parse JSON-formatted response."""
         metadata["parsing_method"] = "json"
-        
+
         # Extract JSON from response (handle code blocks)
-        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-        else:
-            # Try to find JSON without code blocks
-            json_start = content.find('{')
-            json_end = content.rfind('}')
-            if json_start != -1 and json_end != -1 and json_end > json_start:
-                json_str = content[json_start:json_end + 1]
-            else:
-                return None
+        # First try to find JSON within code blocks
+        json_str = self._extract_json_from_codeblock(content)
+
+        if not json_str:
+            # Try to find JSON without code blocks using brace counting
+            json_str = self._extract_json_with_brace_counting(content)
+
+        if not json_str:
+            return None
         
         try:
             data = json.loads(json_str)
@@ -453,3 +451,93 @@ class ResponseParser:
             return [value] if value else []
         else:
             return [str(value)] if value else []
+
+    def _extract_json_from_codeblock(self, content: str) -> Optional[str]:
+        """Extract JSON from markdown code blocks using brace counting.
+
+        Args:
+            content: Content that may contain JSON in code blocks
+
+        Returns:
+            Extracted JSON string or None
+        """
+        # Look for ```json or ``` followed by {
+        code_block_pattern = r'```(?:json)?\s*'
+        match = re.search(code_block_pattern + r'(\{)', content, re.DOTALL)
+
+        if not match:
+            return None
+
+        # Start position is where the { is found
+        start_pos = match.start(1)
+
+        # Use brace counting to find the matching closing brace
+        json_str = self._extract_balanced_braces(content, start_pos)
+
+        if json_str:
+            # Verify it ends before the closing ``` if present
+            end_pos = start_pos + len(json_str)
+            remaining = content[end_pos:end_pos + 20]
+            if '```' in remaining:
+                return json_str
+
+        return json_str
+
+    def _extract_json_with_brace_counting(self, content: str) -> Optional[str]:
+        """Extract JSON using brace counting without code blocks.
+
+        Args:
+            content: Content that may contain JSON
+
+        Returns:
+            Extracted JSON string or None
+        """
+        json_start = content.find('{')
+        if json_start == -1:
+            return None
+
+        return self._extract_balanced_braces(content, json_start)
+
+    def _extract_balanced_braces(self, content: str, start_pos: int) -> Optional[str]:
+        """Extract JSON object using balanced brace counting.
+
+        Args:
+            content: Full content string
+            start_pos: Position of opening brace
+
+        Returns:
+            JSON string with balanced braces or None
+        """
+        if start_pos >= len(content) or content[start_pos] != '{':
+            return None
+
+        brace_count = 0
+        in_string = False
+        escape_next = False
+        end_pos = start_pos
+
+        for i in range(start_pos, len(content)):
+            char = content[i]
+
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if not in_string:
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_pos = i
+                        return content[start_pos:end_pos + 1]
+
+        return None
