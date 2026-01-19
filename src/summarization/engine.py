@@ -199,14 +199,16 @@ class SummarizationEngine:
                 context=context
             )
             
-            # Add API usage metadata
+            # Add API usage metadata and summary options
             summary_result.metadata.update({
                 "claude_model": response.model,
                 "input_tokens": response.input_tokens,
                 "output_tokens": response.output_tokens,
                 "total_tokens": response.total_tokens,
                 "api_response_id": response.response_id,
-                "processing_time": (datetime.utcnow() - summary_result.created_at).total_seconds()
+                "processing_time": (datetime.utcnow() - summary_result.created_at).total_seconds(),
+                "summary_length": options.summary_length.value,
+                "perspective": options.perspective
             })
             
             # Cache result if cache is available
