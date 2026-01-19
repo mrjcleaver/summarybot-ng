@@ -290,7 +290,7 @@ class SummaryOptions(BaseModel):
     min_messages: int = 5
     summarization_model: str = field(default_factory=_get_default_model)
     temperature: float = 0.3
-    max_tokens: int = 4000
+    max_tokens: int = 8000  # Default to max to not limit comprehensive summaries
     extract_action_items: bool = True
     extract_technical_terms: bool = True
     extract_key_points: bool = True
