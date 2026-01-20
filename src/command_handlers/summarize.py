@@ -891,9 +891,52 @@ class SummarizeCommandHandler(BaseCommandHandler):
 
             logger.info(f"Category individual summary: {category.name} with {len(channels)} channels")
 
-            # Send initial status
+            # Ask user where to post summaries
+            from discord import ui
+
+            class SummaryDestinationView(ui.View):
+                def __init__(self):
+                    super().__init__(timeout=30)
+                    self.destination = None
+
+                @ui.button(label="Post to Each Channel", style=discord.ButtonStyle.primary, custom_id="each_channel")
+                async def each_channel(self, interaction: discord.Interaction, button: ui.Button):
+                    self.destination = "each"
+                    await interaction.response.edit_message(
+                        content=f"✅ Will post individual summaries to each channel in **{category.name}**",
+                        view=None
+                    )
+                    self.stop()
+
+                @ui.button(label="Post All Here", style=discord.ButtonStyle.secondary, custom_id="current_channel")
+                async def current_channel(self, interaction: discord.Interaction, button: ui.Button):
+                    self.destination = "current"
+                    await interaction.response.edit_message(
+                        content=f"✅ Will post all summaries here",
+                        view=None
+                    )
+                    self.stop()
+
+            # Ask for destination preference
+            view = SummaryDestinationView()
             await interaction.followup.send(
-                f"🔄 Generating individual summaries for {len(channels)} channels in **{category.name}**..."
+                f"📝 Generating individual summaries for {len(channels)} channels in **{category.name}**\n\n"
+                f"Where should I post the summaries?",
+                view=view
+            )
+
+            # Wait for user response
+            await view.wait()
+
+            if view.destination is None:
+                await interaction.followup.send("❌ Timed out waiting for response. Please try again.")
+                return
+
+            post_destination = view.destination
+
+            # Send processing status
+            await interaction.followup.send(
+                f"🔄 Generating summaries..."
             )
 
             # Generate summaries for each channel
@@ -955,20 +998,40 @@ class SummarizeCommandHandler(BaseCommandHandler):
                 f"✅ Generated {success_count}/{len(channels)} summaries for category **{category.name}**"
             )
 
-            # Post individual summaries to their respective channels
-            for result in results:
-                if result["success"]:
-                    ch = result["channel"]
-                    summary = result["summary"]
-                    embed_dict = summary.to_embed_dict()
-                    embed = discord.Embed.from_dict(embed_dict)
+            # Post summaries based on user preference
+            if post_destination == "each":
+                # Post individual summaries to their respective channels
+                for result in results:
+                    if result["success"]:
+                        ch = result["channel"]
+                        summary = result["summary"]
+                        embed_dict = summary.to_embed_dict()
+                        embed = discord.Embed.from_dict(embed_dict)
 
-                    try:
-                        await ch.send(embed=embed)
-                    except Exception as e:
-                        logger.error(f"Failed to post summary to #{ch.name}: {e}")
+                        try:
+                            await ch.send(embed=embed)
+                        except Exception as e:
+                            logger.error(f"Failed to post summary to #{ch.name}: {e}")
 
-            logger.info(f"Category individual summary completed for {category.name}: {success_count}/{len(channels)} successful")
+                logger.info(f"Category individual summary completed for {category.name}: {success_count}/{len(channels)} posted to respective channels")
+            else:
+                # Post all summaries to the current channel
+                for result in results:
+                    if result["success"]:
+                        ch = result["channel"]
+                        summary = result["summary"]
+                        embed_dict = summary.to_embed_dict()
+                        embed = discord.Embed.from_dict(embed_dict)
+
+                        # Add channel name to title
+                        embed["title"] = f"#{ch.name}: {embed.get('title', 'Summary')}"
+
+                        try:
+                            await interaction.followup.send(embed=embed)
+                        except Exception as e:
+                            logger.error(f"Failed to post summary for #{ch.name}: {e}")
+
+                logger.info(f"Category individual summary completed for {category.name}: {success_count}/{len(channels)} posted to invocation channel")
 
         except Exception as e:
             logger.exception(f"Category individual summary failed: {e}")
