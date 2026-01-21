@@ -87,7 +87,7 @@ class WebhookServer:
             CORSMiddleware,
             allow_origins=cors_origins,
             allow_credentials=True,
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["*"],
             expose_headers=["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"]
         )
