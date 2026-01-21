@@ -337,6 +337,12 @@ async def generate_summary(
                 channel_id=body.channel_ids[0],  # Primary channel
             )
 
+            # Save summary to database
+            summary_repo = await get_summary_repository()
+            if summary_repo:
+                await summary_repo.save_summary(result)
+                logger.info(f"Saved summary {result.id} to database")
+
             _generation_tasks[task_id]["status"] = "completed"
             _generation_tasks[task_id]["summary_id"] = result.id
 
