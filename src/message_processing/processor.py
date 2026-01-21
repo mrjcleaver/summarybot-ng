@@ -73,6 +73,23 @@ class MessageProcessor:
         # Process messages through pipeline
         return await self._process_message_pipeline(raw_messages, options)
     
+    async def process_messages(self,
+                              raw_messages: List[discord.Message],
+                              options: Optional[SummaryOptions] = None) -> List[ProcessedMessage]:
+        """Process raw Discord messages through the pipeline.
+
+        Args:
+            raw_messages: List of raw Discord messages
+            options: Optional summary options for filtering
+
+        Returns:
+            List of processed messages ready for summarization
+        """
+        if options is None:
+            from ..models.summary import SummaryOptions
+            options = SummaryOptions()
+        return await self._process_message_pipeline(raw_messages, options)
+
     async def _process_message_pipeline(self,
                                       raw_messages: List[discord.Message],
                                       options: SummaryOptions) -> List[ProcessedMessage]:
