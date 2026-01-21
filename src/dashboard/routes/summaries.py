@@ -87,7 +87,10 @@ async def list_summaries(
     # Query database for summaries
     summary_repo = await get_summary_repository()
     if not summary_repo:
+        logger.warning(f"Summary repository not available for guild {guild_id}")
         return SummariesResponse(summaries=[], total=0, limit=limit, offset=offset)
+
+    logger.info(f"Fetching summaries for guild {guild_id}, channel={channel_id}, limit={limit}")
 
     criteria = SearchCriteria(
         guild_id=guild_id,
@@ -102,6 +105,7 @@ async def list_summaries(
 
     summaries = await summary_repo.find_summaries(criteria)
     total = await summary_repo.count_summaries(criteria)
+    logger.info(f"Found {len(summaries)} summaries (total={total}) for guild {guild_id}")
 
     # Convert to response format
     summary_items = []
@@ -341,7 +345,9 @@ async def generate_summary(
             summary_repo = await get_summary_repository()
             if summary_repo:
                 await summary_repo.save_summary(result)
-                logger.info(f"Saved summary {result.id} to database")
+                logger.info(f"Saved summary {result.id} to database for guild {guild_id}, channel {body.channel_ids[0]}")
+            else:
+                logger.error(f"Summary repository not available - summary {result.id} NOT saved!")
 
             _generation_tasks[task_id]["status"] = "completed"
             _generation_tasks[task_id]["summary_id"] = result.id
