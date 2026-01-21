@@ -27,15 +27,24 @@ class WebhookServer:
 
     def __init__(self,
                  config: BotConfig,
-                 summarization_engine: SummarizationEngine):
+                 summarization_engine: SummarizationEngine,
+                 discord_bot=None,
+                 task_scheduler=None,
+                 config_manager=None):
         """Initialize webhook server.
 
         Args:
             config: Bot configuration
             summarization_engine: Summarization engine instance
+            discord_bot: Discord bot instance for dashboard API
+            task_scheduler: Task scheduler for dashboard API
+            config_manager: Configuration manager for dashboard API
         """
         self.config = config
         self.summarization_engine = summarization_engine
+        self.discord_bot = discord_bot
+        self.task_scheduler = task_scheduler
+        self.config_manager = config_manager
         self.server: Optional[uvicorn.Server] = None
         self._server_task: Optional[asyncio.Task] = None
 
@@ -149,6 +158,23 @@ class WebhookServer:
             config=self.config
         )
         self.app.include_router(summary_router, prefix="/api/v1", tags=["Summaries"])
+
+        # Include dashboard API endpoints (if Discord bot is available)
+        if self.discord_bot is not None:
+            try:
+                from ..dashboard import create_dashboard_router
+                dashboard_router = create_dashboard_router(
+                    discord_bot=self.discord_bot,
+                    summarization_engine=self.summarization_engine,
+                    task_scheduler=self.task_scheduler,
+                    config_manager=self.config_manager,
+                )
+                self.app.include_router(dashboard_router)
+                logger.info("Dashboard API routes enabled")
+            except ImportError as e:
+                logger.warning(f"Dashboard module not available: {e}")
+            except Exception as e:
+                logger.error(f"Failed to initialize dashboard API: {e}")
 
     def _setup_error_handlers(self) -> None:
         """Configure global error handlers."""

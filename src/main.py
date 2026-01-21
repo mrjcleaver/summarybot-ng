@@ -412,7 +412,10 @@ class SummaryBotApp:
 
         self.webhook_server = WebhookServer(
             config=self.config,
-            summarization_engine=self.summarization_engine
+            summarization_engine=self.summarization_engine,
+            discord_bot=self.discord_bot,
+            task_scheduler=self.task_scheduler,
+            config_manager=self.config_manager
         )
 
         # Start webhook server in background

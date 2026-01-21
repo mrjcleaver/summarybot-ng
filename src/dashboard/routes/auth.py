@@ -1,0 +1,175 @@
+"""
+Authentication routes for dashboard API.
+"""
+
+import logging
+from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
+
+from ..auth import (
+    get_auth,
+    get_current_user,
+    security,
+    DashboardAuth,
+)
+from ..models import (
+    AuthLoginResponse,
+    AuthCallbackRequest,
+    AuthCallbackResponse,
+    AuthRefreshResponse,
+    UserResponse,
+    GuildBriefResponse,
+    GuildRole,
+    ErrorResponse,
+)
+from . import get_discord_bot
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@router.get(
+    "/login",
+    response_model=AuthLoginResponse,
+    summary="Initiate Discord OAuth login",
+    description="Returns the Discord OAuth authorization URL to redirect the user to.",
+)
+async def login():
+    """Get Discord OAuth authorization URL."""
+    auth = get_auth()
+    redirect_url = auth.get_oauth_url()
+    return AuthLoginResponse(redirect_url=redirect_url)
+
+
+@router.post(
+    "/callback",
+    response_model=AuthCallbackResponse,
+    summary="Handle OAuth callback",
+    description="Exchange OAuth code for tokens and create session.",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid code"},
+        502: {"model": ErrorResponse, "description": "Discord API error"},
+    },
+)
+async def callback(request: Request, body: AuthCallbackRequest):
+    """Handle Discord OAuth callback."""
+    auth = get_auth()
+
+    # Exchange code for tokens
+    access_token, refresh_token, expires_in = await auth.exchange_code(body.code)
+
+    # Get user info
+    user = await auth.get_user(access_token)
+
+    # Get user's guilds
+    all_guilds = await auth.get_user_guilds(access_token)
+
+    # Filter to guilds user can manage AND bot is in
+    bot = get_discord_bot()
+    bot_guild_ids = set()
+    if bot and bot.client:
+        bot_guild_ids = {str(g.id) for g in bot.client.guilds}
+
+    manageable_guilds = [
+        g for g in all_guilds
+        if g.can_manage() and g.id in bot_guild_ids
+    ]
+
+    # Create session
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    jwt_token, session = await auth.create_session(
+        user=user,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=expires_in,
+        manageable_guilds=manageable_guilds,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+
+    # Build response
+    guild_responses = []
+    for guild in manageable_guilds:
+        role = GuildRole.OWNER if guild.owner else GuildRole.ADMIN
+        guild_responses.append(
+            GuildBriefResponse(
+                id=guild.id,
+                name=guild.name,
+                icon_url=guild.icon_url,
+                role=role,
+            )
+        )
+
+    return AuthCallbackResponse(
+        token=jwt_token,
+        user=UserResponse(
+            id=user.id,
+            username=user.username,
+            avatar_url=user.avatar_url,
+        ),
+        guilds=guild_responses,
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=AuthRefreshResponse,
+    summary="Refresh JWT token",
+    description="Get a new JWT token using the current valid token.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid or expired token"},
+    },
+)
+async def refresh(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Refresh JWT token."""
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "Not authenticated"},
+        )
+
+    auth = get_auth()
+    new_token = auth.refresh_jwt(credentials.credentials)
+    return AuthRefreshResponse(token=new_token)
+
+
+@router.post(
+    "/logout",
+    summary="Logout and invalidate session",
+    description="Invalidate the current session.",
+)
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Logout and invalidate session."""
+    if credentials is None:
+        return {"success": True}
+
+    auth = get_auth()
+    await auth.invalidate_session(credentials.credentials)
+    return {"success": True}
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Get current user",
+    description="Get the currently authenticated user's information.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+    },
+)
+async def get_me(user: dict = Depends(get_current_user)):
+    """Get current user info."""
+    return UserResponse(
+        id=user["sub"],
+        username=user["username"],
+        avatar_url=f"https://cdn.discordapp.com/avatars/{user['sub']}/{user.get('avatar')}.png"
+        if user.get("avatar")
+        else None,
+    )
