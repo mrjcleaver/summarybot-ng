@@ -12,6 +12,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
   && rm -rf /var/lib/apt/lists/*
 
+# Install flyctl
+RUN curl -L https://fly.io/install.sh | sh \
+    && mv /root/.fly/bin/flyctl /usr/local/bin/flyctl \
+    && chmod +x /usr/local/bin/flyctl  
+
 # pipx locations
 ENV PIPX_BIN_DIR=/usr/local/bin
 ENV PIPX_HOME=/opt/pipx

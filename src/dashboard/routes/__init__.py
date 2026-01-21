@@ -52,6 +52,7 @@ from .summaries import router as summaries_router
 from .schedules import router as schedules_router
 from .webhooks import router as webhooks_router
 from .events import router as events_router
+from .feeds import router as feeds_router
 
 __all__ = [
     "auth_router",
@@ -60,6 +61,7 @@ __all__ = [
     "schedules_router",
     "webhooks_router",
     "events_router",
+    "feeds_router",
     "set_services",
     "get_discord_bot",
     "get_summarization_engine",

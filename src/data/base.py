@@ -11,6 +11,7 @@ from datetime import datetime
 
 from ..models.summary import SummaryResult
 from ..models.task import ScheduledTask, TaskResult
+from ..models.feed import FeedConfig
 from ..config.settings import GuildConfig
 
 
@@ -268,6 +269,85 @@ class TaskRepository(ABC):
 
         Returns:
             List of task execution results
+        """
+        pass
+
+
+class FeedRepository(ABC):
+    """Abstract repository for RSS/Atom feed configuration operations."""
+
+    @abstractmethod
+    async def save_feed(self, feed: FeedConfig) -> str:
+        """
+        Save or update a feed configuration.
+
+        Args:
+            feed: The feed configuration to save
+
+        Returns:
+            The ID of the saved feed
+        """
+        pass
+
+    @abstractmethod
+    async def get_feed(self, feed_id: str) -> Optional[FeedConfig]:
+        """
+        Retrieve a feed by its ID.
+
+        Args:
+            feed_id: The unique identifier of the feed
+
+        Returns:
+            The feed configuration if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_feed_by_token(self, token: str) -> Optional[FeedConfig]:
+        """
+        Retrieve a feed by its authentication token.
+
+        Args:
+            token: The feed authentication token
+
+        Returns:
+            The feed configuration if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_feeds_by_guild(self, guild_id: str) -> List[FeedConfig]:
+        """
+        Get all feeds for a specific guild.
+
+        Args:
+            guild_id: The unique identifier of the guild
+
+        Returns:
+            List of feed configurations for the guild
+        """
+        pass
+
+    @abstractmethod
+    async def delete_feed(self, feed_id: str) -> bool:
+        """
+        Delete a feed configuration.
+
+        Args:
+            feed_id: The unique identifier of the feed
+
+        Returns:
+            True if the feed was deleted, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def update_access_stats(self, feed_id: str) -> None:
+        """
+        Update access statistics for a feed.
+
+        Args:
+            feed_id: The unique identifier of the feed
         """
         pass
 

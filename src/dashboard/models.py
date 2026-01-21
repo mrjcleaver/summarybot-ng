@@ -434,6 +434,73 @@ class WebhookTestResponse(BaseModel):
     error: Optional[str] = None
 
 
+# --- Feeds ---
+
+class FeedListItem(BaseModel):
+    """Feed item in list."""
+    id: str
+    channel_id: Optional[str]
+    channel_name: Optional[str]
+    feed_type: str
+    is_public: bool
+    url: str
+    title: str
+    created_at: datetime
+    last_accessed: Optional[datetime]
+    access_count: int
+
+
+class FeedsResponse(BaseModel):
+    """Response for feed list."""
+    feeds: List[FeedListItem]
+
+
+class FeedCreateRequest(BaseModel):
+    """Request to create feed."""
+    channel_id: Optional[str] = None
+    feed_type: str = "rss"
+    is_public: bool = False
+    title: Optional[str] = None
+    description: Optional[str] = None
+    max_items: int = Field(default=50, ge=1, le=100)
+    include_full_content: bool = True
+
+
+class FeedUpdateRequest(BaseModel):
+    """Request to update feed."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    is_public: Optional[bool] = None
+    max_items: Optional[int] = Field(default=None, ge=1, le=100)
+    include_full_content: Optional[bool] = None
+
+
+class FeedDetailResponse(BaseModel):
+    """Full feed details."""
+    id: str
+    guild_id: str
+    channel_id: Optional[str]
+    channel_name: Optional[str]
+    feed_type: str
+    is_public: bool
+    url: str
+    token: Optional[str]  # Only shown to creator
+    title: str
+    description: str
+    max_items: int
+    include_full_content: bool
+    created_at: datetime
+    created_by: str
+    last_accessed: Optional[datetime]
+    access_count: int
+
+
+class FeedTokenResponse(BaseModel):
+    """Response for token regeneration."""
+    token: str
+    url: str
+
+
 # --- Settings ---
 
 class SettingsUpdateRequest(BaseModel):

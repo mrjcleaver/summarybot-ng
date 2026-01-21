@@ -17,6 +17,7 @@ from .message import (
 from .user import User, UserPermissions
 from .task import ScheduledTask, TaskResult, TaskStatus
 from .webhook import WebhookRequest, WebhookResponse, WebhookDelivery
+from .feed import FeedConfig, FeedType
 
 __all__ = [
     # Base models
@@ -51,5 +52,9 @@ __all__ = [
     # Webhook models
     'WebhookRequest',
     'WebhookResponse',
-    'WebhookDelivery'
+    'WebhookDelivery',
+
+    # Feed models
+    'FeedConfig',
+    'FeedType'
 ]
