@@ -77,9 +77,11 @@ async def list_guilds(user: dict = Depends(get_current_user)):
         # Get config status
         config_status = ConfigStatus.NEEDS_SETUP
         if config_manager:
-            guild_config = config_manager.config.guild_configs.get(guild_id)
-            if guild_config and guild_config.enabled_channels:
-                config_status = ConfigStatus.CONFIGURED
+            current_config = config_manager.get_current_config()
+            if current_config:
+                guild_config = current_config.guild_configs.get(guild_id)
+                if guild_config and guild_config.enabled_channels:
+                    config_status = ConfigStatus.CONFIGURED
 
         # TODO: Get actual summary count and last summary from database
         summary_count = 0
@@ -122,7 +124,9 @@ async def get_guild(
     # Get guild config
     guild_config = None
     if config_manager:
-        guild_config = config_manager.config.guild_configs.get(guild_id)
+        current_config = config_manager.get_current_config()
+        if current_config:
+            guild_config = current_config.guild_configs.get(guild_id)
 
     enabled_channels = guild_config.enabled_channels if guild_config else []
     excluded_channels = guild_config.excluded_channels if guild_config else []
@@ -225,7 +229,13 @@ async def update_config(
         )
 
     # Get or create guild config
-    guild_config = config_manager.config.get_guild_config(guild_id)
+    current_config = config_manager.get_current_config()
+    if not current_config:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "CONFIG_UNAVAILABLE", "message": "Configuration not loaded"},
+        )
+    guild_config = current_config.get_guild_config(guild_id)
 
     # Update fields
     if body.enabled_channels is not None:
@@ -278,7 +288,9 @@ async def sync_channels(
     # Get current enabled channels
     guild_config = None
     if config_manager:
-        guild_config = config_manager.config.guild_configs.get(guild_id)
+        current_config = config_manager.get_current_config()
+        if current_config:
+            guild_config = current_config.guild_configs.get(guild_id)
     enabled_channels = set(guild_config.enabled_channels if guild_config else [])
 
     # Build current channel list
