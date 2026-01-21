@@ -22,7 +22,8 @@ from ..models import (
     ConfigStatus,
     ErrorResponse,
 )
-from . import get_discord_bot, get_config_manager
+from . import get_discord_bot, get_config_manager, get_summary_repository, get_task_repository
+from ...data.base import SearchCriteria
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ async def list_guilds(user: dict = Depends(get_current_user)):
     """List guilds user can manage."""
     bot = get_discord_bot()
     config_manager = get_config_manager()
+    summary_repo = await get_summary_repository()
 
     guild_items = []
     for guild_id in user.get("guilds", []):
@@ -83,9 +85,16 @@ async def list_guilds(user: dict = Depends(get_current_user)):
                 if guild_config and guild_config.enabled_channels:
                     config_status = ConfigStatus.CONFIGURED
 
-        # TODO: Get actual summary count and last summary from database
+        # Get actual summary count and last summary from database
         summary_count = 0
         last_summary_at = None
+        if summary_repo:
+            criteria = SearchCriteria(guild_id=guild_id, limit=1)
+            summary_count = await summary_repo.count_summaries(criteria)
+            if summary_count > 0:
+                recent = await summary_repo.find_summaries(criteria)
+                if recent:
+                    last_summary_at = recent[0].created_at
 
         guild_items.append(
             GuildListItem(
@@ -182,12 +191,39 @@ async def get_guild(
         ),
     )
 
-    # TODO: Get actual stats from database
+    # Get actual stats from database
+    summary_repo = await get_summary_repository()
+    task_repo = await get_task_repository()
+
+    total_summaries = 0
+    summaries_this_week = 0
+    active_schedules = 0
+    last_summary_at = None
+
+    if summary_repo:
+        criteria = SearchCriteria(guild_id=guild_id)
+        total_summaries = await summary_repo.count_summaries(criteria)
+
+        # Get summaries this week
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_criteria = SearchCriteria(guild_id=guild_id, start_time=week_ago)
+        summaries_this_week = await summary_repo.count_summaries(week_criteria)
+
+        # Get last summary
+        recent_criteria = SearchCriteria(guild_id=guild_id, limit=1)
+        recent = await summary_repo.find_summaries(recent_criteria)
+        if recent:
+            last_summary_at = recent[0].created_at
+
+    if task_repo:
+        tasks = await task_repo.get_tasks_by_guild(guild_id)
+        active_schedules = len([t for t in tasks if t.is_active])
+
     stats = GuildStatsResponse(
-        total_summaries=0,
-        summaries_this_week=0,
-        active_schedules=0,
-        last_summary_at=None,
+        total_summaries=total_summaries,
+        summaries_this_week=summaries_this_week,
+        active_schedules=active_schedules,
+        last_summary_at=last_summary_at,
     )
 
     return GuildDetailResponse(

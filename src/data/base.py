@@ -352,6 +352,79 @@ class FeedRepository(ABC):
         pass
 
 
+class WebhookRepository(ABC):
+    """Abstract repository for webhook data operations."""
+
+    @abstractmethod
+    async def save_webhook(self, webhook: Dict[str, Any]) -> str:
+        """
+        Save or update a webhook.
+
+        Args:
+            webhook: Webhook data dictionary
+
+        Returns:
+            The ID of the saved webhook
+        """
+        pass
+
+    @abstractmethod
+    async def get_webhook(self, webhook_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a webhook by its ID.
+
+        Args:
+            webhook_id: The unique identifier of the webhook
+
+        Returns:
+            The webhook data if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_webhooks_by_guild(self, guild_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all webhooks for a specific guild.
+
+        Args:
+            guild_id: The unique identifier of the guild
+
+        Returns:
+            List of webhook data dictionaries
+        """
+        pass
+
+    @abstractmethod
+    async def delete_webhook(self, webhook_id: str) -> bool:
+        """
+        Delete a webhook.
+
+        Args:
+            webhook_id: The unique identifier of the webhook
+
+        Returns:
+            True if the webhook was deleted, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def update_delivery_status(
+        self,
+        webhook_id: str,
+        status: str,
+        delivery_time: Optional[datetime] = None
+    ) -> None:
+        """
+        Update delivery status for a webhook.
+
+        Args:
+            webhook_id: The unique identifier of the webhook
+            status: The delivery status ('success' or 'failed')
+            delivery_time: When the delivery occurred
+        """
+        pass
+
+
 class DatabaseConnection(ABC):
     """Abstract database connection interface."""
 

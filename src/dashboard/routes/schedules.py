@@ -20,7 +20,7 @@ from ..models import (
     SummaryOptionsResponse,
     ErrorResponse,
 )
-from . import get_discord_bot, get_task_scheduler
+from . import get_discord_bot, get_task_scheduler, get_task_repository
 
 logger = logging.getLogger(__name__)
 
@@ -441,5 +441,23 @@ async def get_execution_history(
             detail={"code": "NOT_FOUND", "message": "Schedule not found"},
         )
 
-    # TODO: Fetch from database
-    return ExecutionHistoryResponse(executions=[])
+    # Fetch execution history from database
+    task_repo = await get_task_repository()
+    if not task_repo:
+        return ExecutionHistoryResponse(executions=[])
+
+    results = await task_repo.get_task_results(schedule_id, limit=50)
+
+    executions = [
+        ExecutionHistoryItem(
+            execution_id=result.execution_id,
+            status=result.status.value if hasattr(result.status, 'value') else result.status,
+            started_at=result.started_at,
+            completed_at=result.completed_at,
+            summary_id=result.summary_id,
+            error=result.error_message,
+        )
+        for result in results
+    ]
+
+    return ExecutionHistoryResponse(executions=executions)

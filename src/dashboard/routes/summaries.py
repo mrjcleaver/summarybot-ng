@@ -22,7 +22,8 @@ from ..models import (
     TaskStatusResponse,
     ErrorResponse,
 )
-from . import get_discord_bot, get_summarization_engine
+from . import get_discord_bot, get_summarization_engine, get_summary_repository
+from ...data.base import SearchCriteria
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +82,52 @@ async def list_summaries(
 ):
     """List summaries for a guild."""
     _check_guild_access(guild_id, user)
-    _get_guild_or_404(guild_id)
+    guild = _get_guild_or_404(guild_id)
 
-    # TODO: Fetch from database
-    # For now, return empty list
+    # Query database for summaries
+    summary_repo = await get_summary_repository()
+    if not summary_repo:
+        return SummariesResponse(summaries=[], total=0, limit=limit, offset=offset)
+
+    criteria = SearchCriteria(
+        guild_id=guild_id,
+        channel_id=channel_id,
+        start_time=start_date,
+        end_time=end_date,
+        limit=limit,
+        offset=offset,
+        order_by="created_at",
+        order_direction="DESC",
+    )
+
+    summaries = await summary_repo.find_summaries(criteria)
+    total = await summary_repo.count_summaries(criteria)
+
+    # Convert to response format
+    summary_items = []
+    for summary in summaries:
+        # Get channel name from guild
+        channel_name = None
+        if summary.channel_id:
+            channel = guild.get_channel(int(summary.channel_id))
+            channel_name = channel.name if channel else None
+
+        summary_items.append(
+            SummaryListItem(
+                id=summary.id,
+                channel_id=summary.channel_id,
+                channel_name=channel_name,
+                start_time=summary.start_time,
+                end_time=summary.end_time,
+                message_count=summary.message_count,
+                preview=summary.summary_text[:200] + "..." if len(summary.summary_text) > 200 else summary.summary_text,
+                created_at=summary.created_at,
+            )
+        )
+
     return SummariesResponse(
-        summaries=[],
-        total=0,
+        summaries=summary_items,
+        total=total,
         limit=limit,
         offset=offset,
     )
@@ -110,11 +150,84 @@ async def get_summary(
 ):
     """Get summary details."""
     _check_guild_access(guild_id, user)
+    guild = _get_guild_or_404(guild_id)
 
-    # TODO: Fetch from database
-    raise HTTPException(
-        status_code=404,
-        detail={"code": "NOT_FOUND", "message": "Summary not found"},
+    # Fetch from database
+    summary_repo = await get_summary_repository()
+    if not summary_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    summary = await summary_repo.get_summary(summary_id)
+    if not summary or summary.guild_id != guild_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Summary not found"},
+        )
+
+    # Get channel name
+    channel_name = None
+    if summary.channel_id:
+        channel = guild.get_channel(int(summary.channel_id))
+        channel_name = channel.name if channel else None
+
+    # Convert action items
+    action_items = [
+        ActionItemResponse(
+            description=item.description,
+            assignee=item.assignee,
+            priority=item.priority.value if hasattr(item.priority, 'value') else item.priority,
+            completed=item.completed,
+        )
+        for item in summary.action_items
+    ]
+
+    # Convert technical terms
+    technical_terms = [
+        TechnicalTermResponse(
+            term=term.term,
+            definition=term.definition,
+            category=term.category,
+        )
+        for term in summary.technical_terms
+    ]
+
+    # Convert participants
+    participants = [
+        ParticipantResponse(
+            user_id=p.user_id,
+            display_name=p.display_name,
+            message_count=p.message_count,
+            key_contributions=p.key_contributions,
+        )
+        for p in summary.participants
+    ]
+
+    # Build metadata
+    metadata = SummaryMetadataResponse(
+        summary_length=summary.metadata.get("summary_length", "detailed"),
+        perspective=summary.metadata.get("perspective", "general"),
+        model_used=summary.metadata.get("model_used"),
+        tokens_used=summary.metadata.get("tokens_used"),
+        generation_time_seconds=summary.metadata.get("generation_time_seconds"),
+    )
+
+    return SummaryDetailResponse(
+        id=summary.id,
+        channel_id=summary.channel_id,
+        channel_name=channel_name,
+        start_time=summary.start_time,
+        end_time=summary.end_time,
+        message_count=summary.message_count,
+        summary_text=summary.summary_text,
+        key_points=summary.key_points,
+        action_items=action_items,
+        technical_terms=technical_terms,
+        participants=participants,
+        metadata=metadata,
+        created_at=summary.created_at,
     )
 
 

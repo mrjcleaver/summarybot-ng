@@ -45,6 +45,33 @@ def get_config_manager():
     return _config_manager
 
 
+async def get_summary_repository():
+    """Get summary repository instance."""
+    try:
+        from ...data import get_summary_repository as _get_repo
+        return await _get_repo()
+    except RuntimeError:
+        return None
+
+
+async def get_task_repository():
+    """Get task repository instance."""
+    try:
+        from ...data import get_task_repository as _get_repo
+        return await _get_repo()
+    except RuntimeError:
+        return None
+
+
+async def get_webhook_repository():
+    """Get webhook repository instance."""
+    try:
+        from ...data import get_webhook_repository as _get_repo
+        return await _get_repo()
+    except RuntimeError:
+        return None
+
+
 # Import routers
 from .auth import router as auth_router
 from .guilds import router as guilds_router

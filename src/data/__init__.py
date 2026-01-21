@@ -32,6 +32,8 @@ from .base import (
     SummaryRepository,
     ConfigRepository,
     TaskRepository,
+    FeedRepository,
+    WebhookRepository,
     DatabaseConnection,
     Transaction,
     SearchCriteria
@@ -43,6 +45,8 @@ from .sqlite import (
     SQLiteSummaryRepository,
     SQLiteConfigRepository,
     SQLiteTaskRepository,
+    SQLiteFeedRepository,
+    SQLiteWebhookRepository,
     SQLiteTransaction
 )
 
@@ -53,7 +57,8 @@ from .repositories import (
     get_repository_factory,
     get_summary_repository,
     get_config_repository,
-    get_task_repository
+    get_task_repository,
+    get_webhook_repository
 )
 
 # Migration utilities
@@ -68,6 +73,8 @@ __all__ = [
     "SummaryRepository",
     "ConfigRepository",
     "TaskRepository",
+    "FeedRepository",
+    "WebhookRepository",
     "DatabaseConnection",
     "Transaction",
     "SearchCriteria",
@@ -77,6 +84,8 @@ __all__ = [
     "SQLiteSummaryRepository",
     "SQLiteConfigRepository",
     "SQLiteTaskRepository",
+    "SQLiteFeedRepository",
+    "SQLiteWebhookRepository",
     "SQLiteTransaction",
 
     # Repository factory
@@ -86,6 +95,7 @@ __all__ = [
     "get_summary_repository",
     "get_config_repository",
     "get_task_repository",
+    "get_webhook_repository",
 
     # Migrations
     "MigrationRunner",

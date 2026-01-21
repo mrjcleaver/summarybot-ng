@@ -20,14 +20,11 @@ from ..models import (
     WebhookTestResponse,
     ErrorResponse,
 )
-from . import get_discord_bot, get_config_manager
+from . import get_discord_bot, get_config_manager, get_webhook_repository
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# In-memory webhook storage (replace with database in production)
-_webhooks: dict[str, dict] = {}
 
 
 def _check_guild_access(guild_id: str, user: dict):
@@ -97,12 +94,13 @@ async def list_webhooks(
     _check_guild_access(guild_id, user)
     _get_guild_or_404(guild_id)
 
-    # Get webhooks for this guild
-    guild_webhooks = [
-        _webhook_to_response(wh)
-        for wh in _webhooks.values()
-        if wh["guild_id"] == guild_id
-    ]
+    # Get webhooks from database
+    webhook_repo = await get_webhook_repository()
+    if not webhook_repo:
+        return WebhooksResponse(webhooks=[])
+
+    webhooks = await webhook_repo.get_webhooks_by_guild(guild_id)
+    guild_webhooks = [_webhook_to_response(wh) for wh in webhooks]
 
     return WebhooksResponse(webhooks=guild_webhooks)
 
@@ -133,6 +131,13 @@ async def create_webhook(
             detail={"code": "INVALID_URL", "message": "URL must start with http:// or https://"},
         )
 
+    webhook_repo = await get_webhook_repository()
+    if not webhook_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
     # Create webhook
     webhook_id = f"wh_{secrets.token_urlsafe(16)}"
     webhook = {
@@ -149,7 +154,7 @@ async def create_webhook(
         "created_at": datetime.utcnow(),
     }
 
-    _webhooks[webhook_id] = webhook
+    await webhook_repo.save_webhook(webhook)
 
     return _webhook_to_response(webhook)
 
@@ -172,7 +177,14 @@ async def get_webhook(
     """Get webhook details."""
     _check_guild_access(guild_id, user)
 
-    webhook = _webhooks.get(webhook_id)
+    webhook_repo = await get_webhook_repository()
+    if not webhook_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    webhook = await webhook_repo.get_webhook(webhook_id)
     if not webhook or webhook["guild_id"] != guild_id:
         raise HTTPException(
             status_code=404,
@@ -201,7 +213,14 @@ async def update_webhook(
     """Update a webhook."""
     _check_guild_access(guild_id, user)
 
-    webhook = _webhooks.get(webhook_id)
+    webhook_repo = await get_webhook_repository()
+    if not webhook_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    webhook = await webhook_repo.get_webhook(webhook_id)
     if not webhook or webhook["guild_id"] != guild_id:
         raise HTTPException(
             status_code=404,
@@ -229,6 +248,8 @@ async def update_webhook(
     if body.headers is not None:
         webhook["headers"] = body.headers
 
+    await webhook_repo.save_webhook(webhook)
+
     return _webhook_to_response(webhook)
 
 
@@ -249,14 +270,21 @@ async def delete_webhook(
     """Delete a webhook."""
     _check_guild_access(guild_id, user)
 
-    webhook = _webhooks.get(webhook_id)
+    webhook_repo = await get_webhook_repository()
+    if not webhook_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    webhook = await webhook_repo.get_webhook(webhook_id)
     if not webhook or webhook["guild_id"] != guild_id:
         raise HTTPException(
             status_code=404,
             detail={"code": "NOT_FOUND", "message": "Webhook not found"},
         )
 
-    del _webhooks[webhook_id]
+    await webhook_repo.delete_webhook(webhook_id)
 
     return {"success": True}
 
@@ -279,7 +307,14 @@ async def test_webhook(
     """Test a webhook."""
     _check_guild_access(guild_id, user)
 
-    webhook = _webhooks.get(webhook_id)
+    webhook_repo = await get_webhook_repository()
+    if not webhook_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    webhook = await webhook_repo.get_webhook(webhook_id)
     if not webhook or webhook["guild_id"] != guild_id:
         raise HTTPException(
             status_code=404,
@@ -308,9 +343,9 @@ async def test_webhook(
 
             elapsed_ms = int((time.time() - start_time) * 1000)
 
-            # Update webhook status
-            webhook["last_delivery"] = datetime.utcnow()
-            webhook["last_status"] = "success" if response.is_success else "failed"
+            # Update webhook status in database
+            status = "success" if response.is_success else "failed"
+            await webhook_repo.update_delivery_status(webhook_id, status, datetime.utcnow())
 
             return WebhookTestResponse(
                 success=response.is_success,
@@ -319,8 +354,7 @@ async def test_webhook(
             )
 
     except httpx.TimeoutException:
-        webhook["last_delivery"] = datetime.utcnow()
-        webhook["last_status"] = "failed"
+        await webhook_repo.update_delivery_status(webhook_id, "failed", datetime.utcnow())
         return WebhookTestResponse(
             success=False,
             response_code=None,
@@ -329,8 +363,7 @@ async def test_webhook(
         )
 
     except httpx.RequestError as e:
-        webhook["last_delivery"] = datetime.utcnow()
-        webhook["last_status"] = "failed"
+        await webhook_repo.update_delivery_status(webhook_id, "failed", datetime.utcnow())
         return WebhookTestResponse(
             success=False,
             response_code=None,
