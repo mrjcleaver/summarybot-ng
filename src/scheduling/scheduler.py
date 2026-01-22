@@ -319,6 +319,23 @@ class TaskScheduler:
             logger.warning(f"Task {task_id} not found for resuming")
             return False
 
+    async def execute_task(self, task: ScheduledTask) -> bool:
+        """Execute a task immediately.
+
+        Args:
+            task: Task to execute
+
+        Returns:
+            True if execution started successfully
+        """
+        try:
+            logger.info(f"Manually executing task {task.id}")
+            await self._execute_scheduled_task(task.id)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to execute task {task.id}: {e}")
+            return False
+
     def _create_trigger(self, task: ScheduledTask):
         """Create APScheduler trigger from scheduled task."""
         if task.schedule_type == ScheduleType.ONCE:

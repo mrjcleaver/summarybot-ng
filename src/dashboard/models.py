@@ -296,9 +296,18 @@ class TimeRangeRequest(BaseModel):
     end: Optional[datetime] = None
 
 
+class SummaryScope(str, Enum):
+    """Scope for summary generation."""
+    CHANNEL = "channel"      # Specific channel(s)
+    CATEGORY = "category"    # All channels in a category
+    GUILD = "guild"          # All enabled channels in the guild
+
+
 class GenerateSummaryRequest(BaseModel):
     """Request to generate summary."""
-    channel_ids: List[str]
+    scope: SummaryScope = SummaryScope.CHANNEL  # Default to channel for backwards compatibility
+    channel_ids: Optional[List[str]] = None     # Required for CHANNEL scope
+    category_id: Optional[str] = None           # Required for CATEGORY scope
     time_range: TimeRangeRequest
     options: Optional[SummaryOptionsResponse] = None
 

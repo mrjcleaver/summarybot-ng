@@ -268,9 +268,56 @@ async def generate_summary(
             detail={"code": "ENGINE_UNAVAILABLE", "message": "Summarization engine not available"},
         )
 
+    # Resolve channel_ids based on scope
+    from ..models import SummaryScope
+    channel_ids = []
+
+    if body.scope == SummaryScope.CHANNEL:
+        # Use provided channel IDs
+        if not body.channel_ids:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "MISSING_CHANNELS", "message": "channel_ids required for channel scope"},
+            )
+        channel_ids = body.channel_ids
+
+    elif body.scope == SummaryScope.CATEGORY:
+        # Get all text channels in the specified category
+        if not body.category_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "MISSING_CATEGORY", "message": "category_id required for category scope"},
+            )
+        category = guild.get_channel(int(body.category_id))
+        if not category:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "CATEGORY_NOT_FOUND", "message": "Category not found"},
+            )
+        # Get text channels in this category
+        channel_ids = [str(c.id) for c in guild.text_channels if c.category_id == category.id]
+        if not channel_ids:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "NO_CHANNELS", "message": "No text channels found in category"},
+            )
+
+    elif body.scope == SummaryScope.GUILD:
+        # Get all enabled channels from guild config
+        config_manager = get_config_manager()
+        if config_manager:
+            guild_config = await config_manager.get_guild_config(guild_id)
+            if guild_config and guild_config.enabled_channels:
+                channel_ids = guild_config.enabled_channels
+            else:
+                # Fall back to all text channels
+                channel_ids = [str(c.id) for c in guild.text_channels]
+        else:
+            channel_ids = [str(c.id) for c in guild.text_channels]
+
     # Validate channels exist in guild
     guild_channels = {str(c.id) for c in guild.text_channels}
-    invalid_channels = set(body.channel_ids) - guild_channels
+    invalid_channels = set(channel_ids) - guild_channels
     if invalid_channels:
         raise HTTPException(
             status_code=400,
@@ -300,7 +347,7 @@ async def generate_summary(
     _generation_tasks[task_id] = {
         "status": "processing",
         "guild_id": guild_id,
-        "channel_ids": body.channel_ids,
+        "channel_ids": channel_ids,
         "started_at": now,
         "summary_id": None,
         "error": None,
@@ -309,14 +356,14 @@ async def generate_summary(
     # Start generation in background
     async def run_generation():
         logger.info(f"[{task_id}] Starting background summary generation for guild {guild_id}")
-        logger.info(f"[{task_id}] Time range: {start_time} to {end_time}")
-        logger.info(f"[{task_id}] Channels: {body.channel_ids}")
+        logger.info(f"[{task_id}] Scope: {body.scope.value}, Time range: {start_time} to {end_time}")
+        logger.info(f"[{task_id}] Channels ({len(channel_ids)}): {channel_ids}")
         try:
             from ...message_processing import MessageProcessor
 
             # Collect messages from all channels
             all_messages = []
-            for channel_id in body.channel_ids:
+            for channel_id in channel_ids:
                 channel = guild.get_channel(int(channel_id))
                 logger.info(f"[{task_id}] Fetching from channel {channel_id}: {channel.name if channel else 'NOT FOUND'}")
                 if channel:
@@ -353,8 +400,8 @@ async def generate_summary(
             logger.info(f"[{task_id}] Processed {len(processed)} messages")
 
             # Get channel and guild info for context
-            primary_channel = guild.get_channel(int(body.channel_ids[0]))
-            channel_name = primary_channel.name if primary_channel else "unknown"
+            primary_channel = guild.get_channel(int(channel_ids[0]))
+            channel_name = primary_channel.name if primary_channel else "multiple channels"
 
             # Calculate time span and participant count
             time_span_hours = (end_time - start_time).total_seconds() / 3600
@@ -363,7 +410,7 @@ async def generate_summary(
             # Create summarization context
             from ...models.summary import SummarizationContext
             context = SummarizationContext(
-                channel_name=channel_name,
+                channel_name=channel_name if len(channel_ids) == 1 else f"{len(channel_ids)} channels",
                 guild_name=guild.name,
                 total_participants=len(unique_authors),
                 time_span_hours=time_span_hours,
@@ -375,7 +422,7 @@ async def generate_summary(
                 options=options,
                 context=context,
                 guild_id=guild_id,
-                channel_id=body.channel_ids[0],
+                channel_id=channel_ids[0],  # Primary channel for storage
             )
             logger.info(f"[{task_id}] Summarization complete, result id: {result.id}")
 
@@ -385,7 +432,7 @@ async def generate_summary(
             if summary_repo:
                 logger.info(f"[{task_id}] Saving summary to database...")
                 await summary_repo.save_summary(result)
-                logger.info(f"[{task_id}] Saved summary {result.id} to database for guild {guild_id}, channel {body.channel_ids[0]}")
+                logger.info(f"[{task_id}] Saved summary {result.id} to database for guild {guild_id}, scope {body.scope.value}")
             else:
                 logger.error(f"[{task_id}] Summary repository not available - summary {result.id} NOT saved!")
 
