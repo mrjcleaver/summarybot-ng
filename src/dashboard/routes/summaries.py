@@ -302,6 +302,9 @@ async def generate_summary(
 
     # Start generation in background
     async def run_generation():
+        logger.info(f"[{task_id}] Starting background summary generation for guild {guild_id}")
+        logger.info(f"[{task_id}] Time range: {start_time} to {end_time}")
+        logger.info(f"[{task_id}] Channels: {body.channel_ids}")
         try:
             from ...message_processing import MessageProcessor
 
@@ -309,15 +312,22 @@ async def generate_summary(
             all_messages = []
             for channel_id in body.channel_ids:
                 channel = guild.get_channel(int(channel_id))
+                logger.info(f"[{task_id}] Fetching from channel {channel_id}: {channel.name if channel else 'NOT FOUND'}")
                 if channel:
+                    msg_count = 0
                     async for message in channel.history(
                         after=start_time,
                         before=end_time,
                         limit=1000,
                     ):
                         all_messages.append(message)
+                        msg_count += 1
+                    logger.info(f"[{task_id}] Fetched {msg_count} messages from {channel.name}")
+
+            logger.info(f"[{task_id}] Total messages collected: {len(all_messages)}")
 
             if not all_messages:
+                logger.warning(f"[{task_id}] No messages found in time range")
                 _generation_tasks[task_id]["status"] = "failed"
                 _generation_tasks[task_id]["error"] = "No messages found in time range"
                 return
@@ -331,29 +341,54 @@ async def generate_summary(
                 min_messages=1,  # Allow single message summaries from dashboard
             )
 
+            logger.info(f"[{task_id}] Processing {len(all_messages)} messages...")
             processor = MessageProcessor(bot.client)
             processed = await processor.process_messages(all_messages, options)
+            logger.info(f"[{task_id}] Processed {len(processed)} messages")
 
-            result = await engine.summarize(
-                messages=processed,
-                options=options,
-                guild_id=guild_id,
-                channel_id=body.channel_ids[0],  # Primary channel
+            # Get channel and guild info for context
+            primary_channel = guild.get_channel(int(body.channel_ids[0]))
+            channel_name = primary_channel.name if primary_channel else "unknown"
+
+            # Calculate time span and participant count
+            time_span_hours = (end_time - start_time).total_seconds() / 3600
+            unique_authors = {msg.author_id for msg in processed}
+
+            # Create summarization context
+            from ...models.summary import SummarizationContext
+            context = SummarizationContext(
+                channel_name=channel_name,
+                guild_name=guild.name,
+                total_participants=len(unique_authors),
+                time_span_hours=time_span_hours,
             )
 
+            logger.info(f"[{task_id}] Calling summarization engine...")
+            result = await engine.summarize_messages(
+                messages=processed,
+                options=options,
+                context=context,
+                guild_id=guild_id,
+                channel_id=body.channel_ids[0],
+            )
+            logger.info(f"[{task_id}] Summarization complete, result id: {result.id}")
+
             # Save summary to database
+            logger.info(f"[{task_id}] Getting summary repository...")
             summary_repo = await get_summary_repository()
             if summary_repo:
+                logger.info(f"[{task_id}] Saving summary to database...")
                 await summary_repo.save_summary(result)
-                logger.info(f"Saved summary {result.id} to database for guild {guild_id}, channel {body.channel_ids[0]}")
+                logger.info(f"[{task_id}] Saved summary {result.id} to database for guild {guild_id}, channel {body.channel_ids[0]}")
             else:
-                logger.error(f"Summary repository not available - summary {result.id} NOT saved!")
+                logger.error(f"[{task_id}] Summary repository not available - summary {result.id} NOT saved!")
 
             _generation_tasks[task_id]["status"] = "completed"
             _generation_tasks[task_id]["summary_id"] = result.id
+            logger.info(f"[{task_id}] Generation task completed successfully")
 
         except Exception as e:
-            logger.error(f"Summary generation failed: {e}", exc_info=True)
+            logger.error(f"[{task_id}] Summary generation failed: {e}", exc_info=True)
             _generation_tasks[task_id]["status"] = "failed"
             _generation_tasks[task_id]["error"] = str(e)
 
