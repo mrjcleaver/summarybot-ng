@@ -251,19 +251,24 @@ class TechnicalTermResponse(BaseModel):
     """Technical term in summary."""
     term: str
     definition: str
+    category: Optional[str] = None
 
 
 class ParticipantResponse(BaseModel):
     """Participant in summary."""
-    username: str
-    message_count: int
+    user_id: str = ""
+    display_name: str = ""
+    message_count: int = 0
+    key_contributions: List[str] = []
 
 
 class SummaryMetadataResponse(BaseModel):
     """Summary metadata."""
-    model: str
-    tokens_used: int
-    processing_time_ms: int
+    summary_length: str = "detailed"
+    perspective: str = "general"
+    model_used: Optional[str] = None
+    tokens_used: Optional[int] = None
+    generation_time_seconds: Optional[float] = None
 
 
 class SummaryDetailResponse(BaseModel):
