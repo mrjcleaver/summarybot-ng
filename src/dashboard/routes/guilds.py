@@ -287,7 +287,7 @@ async def update_config(
         guild_config.default_summary_options.extract_technical_terms = body.default_options.include_technical_terms
 
     # Save config
-    await config_manager.save_config()
+    await config_manager.save_config(current_config)
 
     # Return updated config
     return GuildConfigResponse(
@@ -339,8 +339,8 @@ async def sync_channels(
     # Update enabled channels to remove non-existent ones
     if guild_config and removed:
         guild_config.enabled_channels = [c for c in guild_config.enabled_channels if c not in removed]
-        if config_manager:
-            await config_manager.save_config()
+        if config_manager and current_config:
+            await config_manager.save_config(current_config)
 
     # Build channel response
     channels = []

@@ -322,17 +322,17 @@ async def generate_summary(
                 _generation_tasks[task_id]["error"] = "No messages found in time range"
                 return
 
-            # Process messages
-            processor = MessageProcessor(bot.client)
-            processed = await processor.process_messages(all_messages)
-
-            # Generate summary
+            # Process messages with relaxed minimum for dashboard
             from ...models.summary import SummaryOptions, SummaryLength
             options = SummaryOptions(
                 summary_length=SummaryLength(body.options.summary_length if body.options else "detailed"),
                 extract_action_items=body.options.include_action_items if body.options else True,
                 extract_technical_terms=body.options.include_technical_terms if body.options else True,
+                min_messages=1,  # Allow single message summaries from dashboard
             )
+
+            processor = MessageProcessor(bot.client)
+            processed = await processor.process_messages(all_messages, options)
 
             result = await engine.summarize(
                 messages=processed,
