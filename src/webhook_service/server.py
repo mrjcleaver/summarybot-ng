@@ -81,11 +81,27 @@ class WebhookServer:
 
     def _setup_middleware(self) -> None:
         """Configure FastAPI middleware."""
-        # CORS middleware
-        cors_origins = self.config.webhook_config.cors_origins or ["*"]
+        # CORS middleware with support for Lovable preview domains
+        cors_origins = self.config.webhook_config.cors_origins or []
+
+        # Add known Lovable domains if not already present
+        lovable_domains = [
+            "https://summarybot.lovable.app",
+            "https://lovable.dev",
+        ]
+        for domain in lovable_domains:
+            if domain not in cors_origins:
+                cors_origins.append(domain)
+
+        # Log configured origins for debugging
+        logger.info(f"CORS allowed origins: {cors_origins}")
+
+        # Use allow_origin_regex to support Lovable preview domains (*.lovable.app)
+        # This handles both exact matches and the preview subdomain pattern
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=cors_origins,
+            allow_origin_regex=r"https://.*\.lovable\.app",
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["*"],
