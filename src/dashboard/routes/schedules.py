@@ -113,7 +113,7 @@ async def list_schedules(
         return SchedulesResponse(schedules=[])
 
     # Get tasks for this guild
-    tasks = scheduler.get_tasks_for_guild(guild_id)
+    tasks = await scheduler.get_scheduled_tasks(guild_id)
     schedules = [_task_to_response(task) for task in tasks]
 
     return SchedulesResponse(schedules=schedules)
