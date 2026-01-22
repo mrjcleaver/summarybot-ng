@@ -219,6 +219,36 @@ class TaskScheduler:
 
         return tasks
 
+    def get_task(self, task_id: str) -> Optional[ScheduledTask]:
+        """Get a single task by ID.
+
+        Args:
+            task_id: Task ID
+
+        Returns:
+            ScheduledTask or None if not found
+        """
+        return self.active_tasks.get(task_id)
+
+    async def update_task(self, task: ScheduledTask) -> bool:
+        """Update an existing task.
+
+        Args:
+            task: Updated task
+
+        Returns:
+            True if updated successfully
+        """
+        if task.id not in self.active_tasks:
+            return False
+
+        # Cancel existing job
+        await self.cancel_task(task.id)
+
+        # Re-schedule with new settings
+        await self.schedule_task(task)
+        return True
+
     async def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed status of a task.
 

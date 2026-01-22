@@ -198,7 +198,7 @@ async def create_schedule(
     task.next_run = task.calculate_next_run()
 
     # Add to scheduler
-    await scheduler.add_task(task)
+    await scheduler.schedule_task(task)
 
     return _task_to_response(task)
 
@@ -358,7 +358,7 @@ async def delete_schedule(
             detail={"code": "NOT_FOUND", "message": "Schedule not found"},
         )
 
-    await scheduler.remove_task(schedule_id)
+    await scheduler.cancel_task(schedule_id)
 
     return {"success": True}
 
