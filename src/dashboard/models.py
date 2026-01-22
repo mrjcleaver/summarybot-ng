@@ -228,8 +228,8 @@ class SummaryListItem(BaseModel):
     end_time: datetime
     message_count: int
     created_at: datetime
-    summary_length: str
-    preview: str
+    summary_length: str = "detailed"  # Default for backwards compatibility
+    preview: str = ""  # Default for backwards compatibility
 
 
 class SummariesResponse(BaseModel):

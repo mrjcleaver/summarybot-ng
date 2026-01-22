@@ -116,14 +116,20 @@ async def list_summaries(
             channel = guild.get_channel(int(summary.channel_id))
             channel_name = channel.name if channel else None
 
+        # Get summary_length from metadata if available
+        summary_length = "detailed"
+        if hasattr(summary, 'metadata') and summary.metadata:
+            summary_length = summary.metadata.get("summary_length", "detailed")
+
         summary_items.append(
             SummaryListItem(
                 id=summary.id,
                 channel_id=summary.channel_id,
-                channel_name=channel_name,
+                channel_name=channel_name or "unknown",
                 start_time=summary.start_time,
                 end_time=summary.end_time,
                 message_count=summary.message_count,
+                summary_length=summary_length,
                 preview=summary.summary_text[:200] + "..." if len(summary.summary_text) > 200 else summary.summary_text,
                 created_at=summary.created_at,
             )
