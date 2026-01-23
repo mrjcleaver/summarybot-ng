@@ -20,7 +20,9 @@ class MessageCleaner:
             timestamp=message.created_at,
             message_type=MessageType(message.type.value) if message.type.value < 22 else MessageType.DEFAULT,
             is_edited=message.edited_at is not None,
-            is_pinned=message.pinned
+            is_pinned=message.pinned,
+            channel_id=str(message.channel.id),
+            channel_name=getattr(message.channel, 'name', None),
         )
     
     def _clean_content(self, content: str) -> str:

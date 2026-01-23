@@ -278,17 +278,21 @@ Leave nothing important out. Aim for 600-1000+ words as needed."""
         
         return "\n".join(instructions)
     
-    def _build_messages_section(self, messages: List[ProcessedMessage], 
+    def _build_messages_section(self, messages: List[ProcessedMessage],
                                options: SummaryOptions) -> str:
         """Build messages section with formatted content."""
         parts = ["## Messages to Summarize:"]
-        
+
         for i, message in enumerate(messages, 1):
             # Skip empty messages unless they have attachments
             if not message.has_substantial_content():
                 continue
-            
-            message_parts = [f"**{message.author_name}** ({message.timestamp.strftime('%H:%M')})"]
+
+            # Include channel name for multi-channel context
+            if message.channel_name:
+                message_parts = [f"**{message.author_name}** in #{message.channel_name} ({message.timestamp.strftime('%H:%M')})"]
+            else:
+                message_parts = [f"**{message.author_name}** ({message.timestamp.strftime('%H:%M')})"]
             
             # Add message content
             if message.content:

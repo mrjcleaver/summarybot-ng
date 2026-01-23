@@ -167,6 +167,9 @@ class ProcessedMessage(BaseModel):
     reactions_count: int = 0
     is_edited: bool = False
     is_pinned: bool = False
+    # Channel context for multi-channel summaries
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
     
     def clean_content(self) -> str:
         """Get cleaned content without mentions, formatting, etc."""
