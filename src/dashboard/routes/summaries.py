@@ -111,9 +111,11 @@ async def list_summaries(
     # Convert to response format
     summary_items = []
     for summary in summaries:
-        # Get channel name from guild
+        # Get channel name - prefer context (handles multi-channel), fall back to Discord lookup
         channel_name = None
-        if summary.channel_id:
+        if summary.context and summary.context.channel_name:
+            channel_name = summary.context.channel_name
+        elif summary.channel_id:
             channel = guild.get_channel(int(summary.channel_id))
             channel_name = channel.name if channel else None
 
@@ -178,9 +180,11 @@ async def get_summary(
             detail={"code": "NOT_FOUND", "message": "Summary not found"},
         )
 
-    # Get channel name
+    # Get channel name - prefer context (handles multi-channel), fall back to Discord lookup
     channel_name = None
-    if summary.channel_id:
+    if summary.context and summary.context.channel_name:
+        channel_name = summary.context.channel_name
+    elif summary.channel_id:
         channel = guild.get_channel(int(summary.channel_id))
         channel_name = channel.name if channel else None
 
