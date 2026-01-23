@@ -24,6 +24,44 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get(
+    "/errors/health",
+    summary="Error system health check",
+    description="Check if error tracking system is working.",
+)
+async def error_health_check():
+    """Check error tracking health."""
+    result = {
+        "repository_available": False,
+        "tracker_initialized": False,
+        "table_exists": False,
+        "error": None,
+    }
+
+    # Check repository
+    try:
+        from ...data import get_error_repository as _get_repo
+        repo = await _get_repo()
+        result["repository_available"] = repo is not None
+        if repo:
+            # Try a simple query to check table exists
+            errors = await repo.get_recent_errors(limit=1)
+            result["table_exists"] = True
+    except Exception as e:
+        result["error"] = str(e)
+
+    # Check tracker
+    try:
+        from ...logging.error_tracker import get_error_tracker
+        tracker = get_error_tracker()
+        result["tracker_initialized"] = tracker._initialized
+        result["pending_errors"] = len(tracker._pending_errors)
+    except Exception as e:
+        result["tracker_error"] = str(e)
+
+    return result
+
+
 async def get_error_repository():
     """Get error repository instance."""
     try:

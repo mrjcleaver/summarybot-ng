@@ -41,17 +41,23 @@ class ErrorTracker:
 
         try:
             from ..data import get_error_repository
+            logger.info("ErrorTracker: Getting error repository...")
             self._repository = await get_error_repository()
+            logger.info(f"ErrorTracker: Got repository: {self._repository}")
             self._initialized = True
 
             # Flush any pending errors
-            for error in self._pending_errors:
-                await self._save_error(error)
-            self._pending_errors.clear()
+            if self._pending_errors:
+                logger.info(f"ErrorTracker: Flushing {len(self._pending_errors)} pending errors")
+                for error in self._pending_errors:
+                    await self._save_error(error)
+                self._pending_errors.clear()
 
-            logger.info("ErrorTracker initialized")
+            logger.info("ErrorTracker initialized successfully")
         except Exception as e:
-            logger.warning(f"ErrorTracker could not initialize repository: {e}")
+            import traceback
+            logger.error(f"ErrorTracker could not initialize repository: {e}")
+            logger.error(f"ErrorTracker init traceback: {traceback.format_exc()}")
 
     async def _save_error(self, error: ErrorLog) -> None:
         """Save error to repository."""
