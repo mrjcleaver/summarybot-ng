@@ -353,7 +353,8 @@ async def generate_summary(
         # Get all enabled channels from guild config
         config_manager = get_config_manager()
         if config_manager:
-            guild_config = await config_manager.get_guild_config(guild_id)
+            config = config_manager.get_current_config()
+            guild_config = config.guild_configs.get(guild_id) if config else None
             if guild_config and guild_config.enabled_channels:
                 channel_ids = guild_config.enabled_channels
             else:
