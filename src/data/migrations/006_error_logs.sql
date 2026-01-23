@@ -1,4 +1,4 @@
--- Migration 005: Error logging for operational error tracking
+-- Migration 006: Error logging for operational error tracking
 -- Created: 2026-01-22
 
 -- Error logs table for tracking operational errors
@@ -36,4 +36,4 @@ CREATE INDEX IF NOT EXISTS idx_error_unresolved ON error_logs(resolved_at) WHERE
 
 -- Update schema version
 INSERT INTO schema_version (version, applied_at, description)
-VALUES (5, datetime('now'), 'Add error_logs table for operational error tracking');
+VALUES (6, datetime('now'), 'Add error_logs table for operational error tracking');
