@@ -18,7 +18,7 @@ from ..models import (
     FeedTokenResponse,
     ErrorResponse,
 )
-from . import get_discord_bot, get_summarization_engine
+from . import get_discord_bot, get_summarization_engine, get_feed_repository, get_summary_repository
 from ...models.feed import FeedConfig, FeedType
 from ...feeds.generator import FeedGenerator
 from ...data.base import SearchCriteria
@@ -26,9 +26,6 @@ from ...data.base import SearchCriteria
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# In-memory feed storage (replace with database in production)
-_feeds: dict[str, FeedConfig] = {}
 
 # Feed generator instance
 _feed_generator: Optional[FeedGenerator] = None
@@ -145,12 +142,16 @@ async def list_feeds(
     _check_guild_access(guild_id, user)
     guild = _get_guild_or_404(guild_id)
 
-    # Get feeds for this guild
+    # Get feeds from database
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        return FeedsResponse(feeds=[])
+
+    feeds = await feed_repo.get_feeds_by_guild(guild_id)
     guild_feeds = []
-    for feed in _feeds.values():
-        if feed.guild_id == guild_id:
-            channel_name = _get_channel_name(guild, feed.channel_id)
-            guild_feeds.append(_feed_to_list_item(feed, channel_name))
+    for feed in feeds:
+        channel_name = _get_channel_name(guild, feed.channel_id)
+        guild_feeds.append(_feed_to_list_item(feed, channel_name))
 
     return FeedsResponse(feeds=guild_feeds)
 
@@ -207,7 +208,15 @@ async def create_feed(
         created_by=user["sub"],
     )
 
-    _feeds[feed.id] = feed
+    # Save to database
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    await feed_repo.save_feed(feed)
     logger.info(f"Created feed {feed.id} for guild {guild_id}")
 
     return _feed_to_detail(feed, guild.name, channel_name)
@@ -232,7 +241,14 @@ async def get_feed(
     _check_guild_access(guild_id, user)
     guild = _get_guild_or_404(guild_id)
 
-    feed = _feeds.get(feed_id)
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    feed = await feed_repo.get_feed(feed_id)
     if not feed or feed.guild_id != guild_id:
         raise HTTPException(
             status_code=404,
@@ -263,7 +279,14 @@ async def update_feed(
     _check_guild_access(guild_id, user)
     guild = _get_guild_or_404(guild_id)
 
-    feed = _feeds.get(feed_id)
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    feed = await feed_repo.get_feed(feed_id)
     if not feed or feed.guild_id != guild_id:
         raise HTTPException(
             status_code=404,
@@ -289,6 +312,9 @@ async def update_feed(
     if body.include_full_content is not None:
         feed.include_full_content = body.include_full_content
 
+    # Save updates to database
+    await feed_repo.save_feed(feed)
+
     channel_name = _get_channel_name(guild, feed.channel_id)
     return _feed_to_detail(feed, guild.name, channel_name)
 
@@ -310,14 +336,21 @@ async def delete_feed(
     """Delete a feed."""
     _check_guild_access(guild_id, user)
 
-    feed = _feeds.get(feed_id)
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    feed = await feed_repo.get_feed(feed_id)
     if not feed or feed.guild_id != guild_id:
         raise HTTPException(
             status_code=404,
             detail={"code": "NOT_FOUND", "message": "Feed not found"},
         )
 
-    del _feeds[feed_id]
+    await feed_repo.delete_feed(feed_id)
     logger.info(f"Deleted feed {feed_id}")
 
     return {"success": True}
@@ -341,7 +374,14 @@ async def regenerate_token(
     """Regenerate feed token."""
     _check_guild_access(guild_id, user)
 
-    feed = _feeds.get(feed_id)
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    feed = await feed_repo.get_feed(feed_id)
     if not feed or feed.guild_id != guild_id:
         raise HTTPException(
             status_code=404,
@@ -349,6 +389,8 @@ async def regenerate_token(
         )
 
     new_token = feed.regenerate_token()
+    await feed_repo.save_feed(feed)
+
     generator = _get_feed_generator()
 
     return FeedTokenResponse(
@@ -404,7 +446,11 @@ async def _serve_feed(
     requested_type: FeedType,
 ) -> Response:
     """Serve feed content with proper caching headers."""
-    feed = _feeds.get(feed_id)
+    feed_repo = await get_feed_repository()
+    if not feed_repo:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    feed = await feed_repo.get_feed(feed_id)
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
 
@@ -433,17 +479,18 @@ async def _serve_feed(
     guild_name = guild.name
     channel_name = _get_channel_name(guild, feed.channel_id)
 
-    # Get summaries
-    # TODO: Replace with actual database query
-    # For now, return empty feed
+    # Get summaries from database
     summaries = []
-
-    # Try to get summaries from the summarization engine cache or database
-    # This is a placeholder - in production, query the SummaryRepository
-    engine = get_summarization_engine()
-    if engine and hasattr(engine, 'cache') and engine.cache:
-        # Try to get cached summaries
-        pass  # Would query database here
+    summary_repo = await get_summary_repository()
+    if summary_repo:
+        criteria = SearchCriteria(
+            guild_id=feed.guild_id,
+            channel_id=feed.channel_id,
+            limit=feed.max_items,
+            order_by="created_at",
+            order_direction="DESC",
+        )
+        summaries = await summary_repo.find_summaries(criteria)
 
     # Generate feed content
     generator = _get_feed_generator()
@@ -457,8 +504,8 @@ async def _serve_feed(
     finally:
         feed.feed_type = original_type
 
-    # Update access stats
-    feed.record_access()
+    # Update access stats in database
+    await feed_repo.update_access_stats(feed_id)
 
     # Generate caching headers
     etag = FeedGenerator.generate_etag(feed_id, summaries)

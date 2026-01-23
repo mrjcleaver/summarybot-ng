@@ -12,6 +12,7 @@ from datetime import datetime
 from ..models.summary import SummaryResult
 from ..models.task import ScheduledTask, TaskResult
 from ..models.feed import FeedConfig
+from ..models.error_log import ErrorLog, ErrorType, ErrorSeverity
 from ..config.settings import GuildConfig
 
 
@@ -421,6 +422,129 @@ class WebhookRepository(ABC):
             webhook_id: The unique identifier of the webhook
             status: The delivery status ('success' or 'failed')
             delivery_time: When the delivery occurred
+        """
+        pass
+
+
+class ErrorRepository(ABC):
+    """Abstract repository for error log operations."""
+
+    @abstractmethod
+    async def save_error(self, error: ErrorLog) -> str:
+        """
+        Save an error log entry.
+
+        Args:
+            error: The error log to save
+
+        Returns:
+            The ID of the saved error
+        """
+        pass
+
+    @abstractmethod
+    async def get_error(self, error_id: str) -> Optional[ErrorLog]:
+        """
+        Retrieve an error by its ID.
+
+        Args:
+            error_id: The unique identifier of the error
+
+        Returns:
+            The error log if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_errors_by_guild(
+        self,
+        guild_id: str,
+        limit: int = 50,
+        error_type: Optional[ErrorType] = None,
+        severity: Optional[ErrorSeverity] = None,
+        include_resolved: bool = False,
+    ) -> List[ErrorLog]:
+        """
+        Get errors for a specific guild.
+
+        Args:
+            guild_id: The unique identifier of the guild
+            limit: Maximum number of errors to return
+            error_type: Filter by error type
+            severity: Filter by severity
+            include_resolved: Include resolved errors
+
+        Returns:
+            List of error logs
+        """
+        pass
+
+    @abstractmethod
+    async def get_recent_errors(
+        self,
+        limit: int = 100,
+        error_type: Optional[ErrorType] = None,
+        severity: Optional[ErrorSeverity] = None,
+    ) -> List[ErrorLog]:
+        """
+        Get recent errors across all guilds.
+
+        Args:
+            limit: Maximum number of errors to return
+            error_type: Filter by error type
+            severity: Filter by severity
+
+        Returns:
+            List of recent error logs
+        """
+        pass
+
+    @abstractmethod
+    async def resolve_error(
+        self,
+        error_id: str,
+        notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Mark an error as resolved.
+
+        Args:
+            error_id: The unique identifier of the error
+            notes: Resolution notes
+
+        Returns:
+            True if the error was resolved, False if not found
+        """
+        pass
+
+    @abstractmethod
+    async def delete_old_errors(self, days: int = 7) -> int:
+        """
+        Delete errors older than specified days.
+
+        Args:
+            days: Delete errors older than this many days
+
+        Returns:
+            Number of errors deleted
+        """
+        pass
+
+    @abstractmethod
+    async def get_error_counts(
+        self,
+        guild_id: Optional[str] = None,
+        hours: int = 24,
+    ) -> Dict[str, int]:
+        """
+        Get error counts grouped by type.
+
+        Args:
+            guild_id: Filter by guild (None = all guilds)
+            hours: Time window in hours
+
+        Returns:
+            Dictionary mapping error types to counts
         """
         pass
 

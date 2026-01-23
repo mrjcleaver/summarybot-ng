@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI
 from cryptography.fernet import Fernet
 
 from .auth import DashboardAuth, set_auth_instance
-from .routes import auth_router, guilds_router, summaries_router, schedules_router, webhooks_router, events_router, feeds_router
+from .routes import auth_router, guilds_router, summaries_router, schedules_router, webhooks_router, events_router, feeds_router, errors_router
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,7 @@ def create_dashboard_router(
     router.include_router(webhooks_router, tags=["Webhooks"])
     router.include_router(events_router, tags=["Events"])
     router.include_router(feeds_router, tags=["Feeds"])
+    router.include_router(errors_router, tags=["Errors"])
 
     return router
 
@@ -111,3 +112,13 @@ def setup_dashboard_api(
     )
     app.include_router(router)
     logger.info("Dashboard API routes added to application")
+
+    # Initialize error tracker on startup
+    @app.on_event("startup")
+    async def init_error_tracker():
+        try:
+            from ..logging.error_tracker import initialize_error_tracker
+            await initialize_error_tracker()
+            logger.info("Error tracker initialized for dashboard")
+        except Exception as e:
+            logger.warning(f"Failed to initialize error tracker: {e}")

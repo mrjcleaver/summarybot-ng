@@ -56,8 +56,22 @@ class WebhookServer:
         async def lifespan(app: FastAPI):
             # Startup
             logger.info("Webhook server starting up")
+
+            # Initialize error tracker
+            try:
+                from ..logging.error_tracker import initialize_error_tracker
+                await initialize_error_tracker()
+                logger.info("Error tracker initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize error tracker: {e}")
+
+            # Start error cleanup task
+            cleanup_task = asyncio.create_task(self._run_error_cleanup())
+
             yield
+
             # Shutdown
+            cleanup_task.cancel()
             logger.info("Webhook server shutting down")
 
         self.app = FastAPI(
@@ -219,6 +233,27 @@ class WebhookServer:
                     "request_id": request.headers.get("X-Request-ID")
                 }
             )
+
+    async def _run_error_cleanup(self) -> None:
+        """Periodically cleanup old error logs."""
+        import os
+        cleanup_interval = int(os.environ.get("ERROR_CLEANUP_INTERVAL_HOURS", "24"))
+
+        while True:
+            try:
+                await asyncio.sleep(cleanup_interval * 3600)  # Convert hours to seconds
+
+                from ..logging.error_tracker import get_error_tracker
+                tracker = get_error_tracker()
+                deleted = await tracker.cleanup_old_errors()
+                if deleted > 0:
+                    logger.info(f"Error cleanup: removed {deleted} old errors")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Error cleanup task failed: {e}")
+                await asyncio.sleep(3600)  # Retry in an hour on failure
 
     async def start_server(self) -> None:
         """Start the webhook server.

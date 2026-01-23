@@ -6,13 +6,15 @@ throughout the application.
 """
 
 from typing import Optional
-from ..base import SummaryRepository, ConfigRepository, TaskRepository, WebhookRepository
+from ..base import SummaryRepository, ConfigRepository, TaskRepository, FeedRepository, WebhookRepository, ErrorRepository
 from ..sqlite import (
     SQLiteConnection,
     SQLiteSummaryRepository,
     SQLiteConfigRepository,
     SQLiteTaskRepository,
-    SQLiteWebhookRepository
+    SQLiteFeedRepository,
+    SQLiteWebhookRepository,
+    SQLiteErrorRepository
 )
 
 
@@ -90,6 +92,28 @@ class RepositoryFactory:
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
+    async def get_feed_repository(self) -> FeedRepository:
+        """Create and return a feed repository instance."""
+        connection = await self.get_connection()
+
+        if self.backend == "sqlite":
+            return SQLiteFeedRepository(connection)
+        elif self.backend == "postgresql":
+            raise NotImplementedError("PostgreSQL support is not yet implemented")
+        else:
+            raise ValueError(f"Unsupported backend: {self.backend}")
+
+    async def get_error_repository(self) -> ErrorRepository:
+        """Create and return an error log repository instance."""
+        connection = await self.get_connection()
+
+        if self.backend == "sqlite":
+            return SQLiteErrorRepository(connection)
+        elif self.backend == "postgresql":
+            raise NotImplementedError("PostgreSQL support is not yet implemented")
+        else:
+            raise ValueError(f"Unsupported backend: {self.backend}")
+
     async def close(self) -> None:
         """Close database connections."""
         if self._connection:
@@ -156,3 +180,15 @@ async def get_webhook_repository() -> WebhookRepository:
     """Get the default webhook repository instance."""
     factory = get_repository_factory()
     return await factory.get_webhook_repository()
+
+
+async def get_feed_repository() -> FeedRepository:
+    """Get the default feed repository instance."""
+    factory = get_repository_factory()
+    return await factory.get_feed_repository()
+
+
+async def get_error_repository() -> ErrorRepository:
+    """Get the default error log repository instance."""
+    factory = get_repository_factory()
+    return await factory.get_error_repository()

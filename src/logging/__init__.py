@@ -26,6 +26,12 @@ from .decorators import log_command
 from .query import CommandLogQuery
 from .analytics import CommandAnalytics
 from .cleanup import LogCleanupService
+from .error_tracker import (
+    ErrorTracker,
+    get_error_tracker,
+    initialize_error_tracker,
+    track_errors,
+)
 
 __all__ = [
     # Models
@@ -42,6 +48,11 @@ __all__ = [
     "CommandLogQuery",
     "CommandAnalytics",
     "LogCleanupService",
+    # Error tracking
+    "ErrorTracker",
+    "get_error_tracker",
+    "initialize_error_tracker",
+    "track_errors",
 ]
 
 __version__ = "1.0.0"

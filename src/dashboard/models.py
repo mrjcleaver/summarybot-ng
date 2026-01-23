@@ -286,6 +286,16 @@ class SummaryDetailResponse(BaseModel):
     participants: List[ParticipantResponse]
     metadata: SummaryMetadataResponse
     created_at: datetime
+    has_prompt_data: bool = False  # Whether prompt/source content is available
+
+
+class SummaryPromptResponse(BaseModel):
+    """Prompt and source content for a summary."""
+    summary_id: str
+    prompt_system: Optional[str] = None  # System prompt sent to LLM
+    prompt_user: Optional[str] = None  # User prompt with formatted messages
+    prompt_template_id: Optional[str] = None  # Custom template ID if used
+    source_content: Optional[str] = None  # Original messages in readable format
 
 
 class TimeRangeRequest(BaseModel):
@@ -534,3 +544,58 @@ class ErrorDetail(BaseModel):
 class ErrorResponse(BaseModel):
     """Error response."""
     error: ErrorDetail
+
+
+# --- Error Logs (Operational Errors) ---
+
+class ErrorLogItem(BaseModel):
+    """Error log item for list display."""
+    id: str
+    guild_id: Optional[str] = None
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
+    error_type: str
+    severity: str
+    error_code: Optional[str] = None
+    message: str
+    operation: str = ""
+    created_at: datetime
+    is_resolved: bool = False
+
+
+class ErrorLogDetail(BaseModel):
+    """Full error log details."""
+    id: str
+    guild_id: Optional[str] = None
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
+    error_type: str
+    severity: str
+    error_code: Optional[str] = None
+    message: str
+    details: Dict[str, Any] = {}
+    operation: str = ""
+    user_id: Optional[str] = None
+    stack_trace: Optional[str] = None
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    resolution_notes: Optional[str] = None
+
+
+class ErrorLogsResponse(BaseModel):
+    """Response for error logs list."""
+    errors: List[ErrorLogItem]
+    total: int
+    unresolved_count: int
+
+
+class ErrorCountsResponse(BaseModel):
+    """Response for error counts by type."""
+    counts: Dict[str, int]
+    total: int
+    period_hours: int
+
+
+class ResolveErrorRequest(BaseModel):
+    """Request to resolve an error."""
+    notes: Optional[str] = None

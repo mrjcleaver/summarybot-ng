@@ -18,6 +18,7 @@ from .user import User, UserPermissions
 from .task import ScheduledTask, TaskResult, TaskStatus
 from .webhook import WebhookRequest, WebhookResponse, WebhookDelivery
 from .feed import FeedConfig, FeedType
+from .error_log import ErrorLog, ErrorType, ErrorSeverity
 
 __all__ = [
     # Base models
@@ -56,5 +57,10 @@ __all__ = [
 
     # Feed models
     'FeedConfig',
-    'FeedType'
+    'FeedType',
+
+    # Error log models
+    'ErrorLog',
+    'ErrorType',
+    'ErrorSeverity',
 ]

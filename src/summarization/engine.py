@@ -210,6 +210,12 @@ class SummarizationEngine:
                 "summary_length": options.summary_length.value,
                 "perspective": options.perspective
             })
+
+            # Store prompt and source content for transparency
+            summary_result.prompt_system = prompt_data.system_prompt
+            summary_result.prompt_user = prompt_data.user_prompt
+            summary_result.prompt_template_id = getattr(self.prompt_resolver, 'last_template_id', None) if self.prompt_resolver and custom_prompt else None
+            summary_result.source_content = self._format_source_content(messages)
             
             # Cache result if cache is available
             if self.cache:
@@ -395,6 +401,37 @@ class SummarizationEngine:
     def _hash_options(self, options: SummaryOptions) -> str:
         """Create hash of options for caching."""
         import hashlib
-        
+
         options_str = f"{options.summary_length.value}-{options.summarization_model}-{options.temperature}-{options.max_tokens}"
         return hashlib.md5(options_str.encode()).hexdigest()[:16]
+
+    def _format_source_content(self, messages: List[ProcessedMessage]) -> str:
+        """Format source messages into readable content for storage.
+
+        Args:
+            messages: List of processed messages
+
+        Returns:
+            Formatted string of message content
+        """
+        lines = []
+        for msg in messages:
+            if not msg.has_substantial_content():
+                continue
+
+            timestamp = msg.timestamp.strftime('%Y-%m-%d %H:%M')
+            content = msg.content or ""
+
+            # Truncate very long messages
+            if len(content) > 500:
+                content = content[:500] + "..."
+
+            lines.append(f"[{timestamp}] {msg.author_name}: {content}")
+
+            # Note attachments
+            if msg.attachments:
+                att_names = [att.filename for att in msg.attachments if hasattr(att, 'filename')]
+                if att_names:
+                    lines.append(f"  [Attachments: {', '.join(att_names)}]")
+
+        return "\n".join(lines)

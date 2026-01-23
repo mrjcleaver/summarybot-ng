@@ -113,6 +113,11 @@ class SummaryResult(BaseModel):
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=utc_now)
     context: Optional[SummarizationContext] = None
+    # Prompt and source tracking
+    prompt_system: Optional[str] = None  # System prompt used
+    prompt_user: Optional[str] = None  # User prompt with formatted messages
+    prompt_template_id: Optional[str] = None  # Custom prompt template ID if used
+    source_content: Optional[str] = None  # Original messages in readable format
     
     def to_embed_dict(self) -> Dict[str, Any]:
         """Convert to Discord embed dictionary."""

@@ -13,6 +13,7 @@ from ..models import (
     SummariesResponse,
     SummaryListItem,
     SummaryDetailResponse,
+    SummaryPromptResponse,
     ActionItemResponse,
     TechnicalTermResponse,
     ParticipantResponse,
@@ -22,7 +23,7 @@ from ..models import (
     TaskStatusResponse,
     ErrorResponse,
 )
-from . import get_discord_bot, get_summarization_engine, get_summary_repository
+from . import get_discord_bot, get_summarization_engine, get_summary_repository, get_config_manager
 from ...data.base import SearchCriteria
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,9 @@ async def get_summary(
         generation_time_seconds=summary.metadata.get("generation_time_seconds"),
     )
 
+    # Check if prompt data is available
+    has_prompt_data = bool(summary.prompt_system or summary.prompt_user or summary.source_content)
+
     return SummaryDetailResponse(
         id=summary.id,
         channel_id=summary.channel_id,
@@ -238,6 +242,49 @@ async def get_summary(
         participants=participants,
         metadata=metadata,
         created_at=summary.created_at,
+        has_prompt_data=has_prompt_data,
+    )
+
+
+@router.get(
+    "/guilds/{guild_id}/summaries/{summary_id}/prompt",
+    response_model=SummaryPromptResponse,
+    summary="Get summary prompt details",
+    description="Get the prompt content and source messages used to generate a summary.",
+    responses={
+        403: {"model": ErrorResponse, "description": "No permission"},
+        404: {"model": ErrorResponse, "description": "Summary not found"},
+    },
+)
+async def get_summary_prompt(
+    guild_id: str = Path(..., description="Discord guild ID"),
+    summary_id: str = Path(..., description="Summary ID"),
+    user: dict = Depends(get_current_user),
+):
+    """Get prompt and source content for a summary."""
+    _check_guild_access(guild_id, user)
+
+    # Fetch from database
+    summary_repo = await get_summary_repository()
+    if not summary_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    summary = await summary_repo.get_summary(summary_id)
+    if not summary or summary.guild_id != guild_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Summary not found"},
+        )
+
+    return SummaryPromptResponse(
+        summary_id=summary.id,
+        prompt_system=summary.prompt_system,
+        prompt_user=summary.prompt_user,
+        prompt_template_id=summary.prompt_template_id,
+        source_content=summary.source_content,
     )
 
 
@@ -444,6 +491,36 @@ async def generate_summary(
             logger.error(f"[{task_id}] Summary generation failed: {e}", exc_info=True)
             _generation_tasks[task_id]["status"] = "failed"
             _generation_tasks[task_id]["error"] = str(e)
+
+            # Track the error for dashboard visibility
+            try:
+                from ...logging.error_tracker import initialize_error_tracker
+                from ...models.error_log import ErrorType, ErrorSeverity
+
+                tracker = await initialize_error_tracker()
+
+                # Determine error type
+                error_type = ErrorType.SUMMARIZATION_ERROR
+                if hasattr(e, 'status'):
+                    if e.status == 403:
+                        error_type = ErrorType.DISCORD_PERMISSION
+                    elif e.status == 404:
+                        error_type = ErrorType.DISCORD_NOT_FOUND
+
+                await tracker.capture_error(
+                    error=e,
+                    error_type=error_type,
+                    guild_id=guild_id,
+                    channel_id=channel_ids[0] if channel_ids else None,
+                    operation=f"generate_summary ({body.scope.value})",
+                    details={
+                        "task_id": task_id,
+                        "channel_count": len(channel_ids),
+                        "scope": body.scope.value,
+                    },
+                )
+            except Exception as track_error:
+                logger.warning(f"Failed to track error: {track_error}")
 
     # Start background task
     asyncio.create_task(run_generation())

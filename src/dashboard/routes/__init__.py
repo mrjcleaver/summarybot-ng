@@ -72,6 +72,15 @@ async def get_webhook_repository():
         return None
 
 
+async def get_feed_repository():
+    """Get feed repository instance."""
+    try:
+        from ...data import get_feed_repository as _get_repo
+        return await _get_repo()
+    except RuntimeError:
+        return None
+
+
 # Import routers
 from .auth import router as auth_router
 from .guilds import router as guilds_router
@@ -80,6 +89,7 @@ from .schedules import router as schedules_router
 from .webhooks import router as webhooks_router
 from .events import router as events_router
 from .feeds import router as feeds_router
+from .errors import router as errors_router
 
 __all__ = [
     "auth_router",
@@ -89,6 +99,7 @@ __all__ = [
     "webhooks_router",
     "events_router",
     "feeds_router",
+    "errors_router",
     "set_services",
     "get_discord_bot",
     "get_summarization_engine",
