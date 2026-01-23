@@ -410,19 +410,45 @@ async def generate_summary(
 
             # Collect messages from all channels
             all_messages = []
+            channel_errors = []
             for channel_id in channel_ids:
                 channel = guild.get_channel(int(channel_id))
                 logger.info(f"[{task_id}] Fetching from channel {channel_id}: {channel.name if channel else 'NOT FOUND'}")
                 if channel:
-                    msg_count = 0
-                    async for message in channel.history(
-                        after=start_time,
-                        before=end_time,
-                        limit=1000,
-                    ):
-                        all_messages.append(message)
-                        msg_count += 1
-                    logger.info(f"[{task_id}] Fetched {msg_count} messages from {channel.name}")
+                    try:
+                        msg_count = 0
+                        async for message in channel.history(
+                            after=start_time,
+                            before=end_time,
+                            limit=1000,
+                        ):
+                            all_messages.append(message)
+                            msg_count += 1
+                        logger.info(f"[{task_id}] Fetched {msg_count} messages from {channel.name}")
+                    except Exception as channel_error:
+                        logger.error(f"[{task_id}] Error fetching from {channel.name}: {channel_error}")
+                        channel_errors.append((channel_id, channel.name, channel_error))
+
+            # Track any channel-level errors
+            if channel_errors:
+                try:
+                    from ...logging.error_tracker import initialize_error_tracker
+                    from ...models.error_log import ErrorType, ErrorSeverity
+
+                    tracker = await initialize_error_tracker()
+                    for ch_id, ch_name, ch_error in channel_errors:
+                        error_type = ErrorType.DISCORD_PERMISSION if (hasattr(ch_error, 'status') and ch_error.status == 403) else ErrorType.DISCORD_CONNECTION
+                        await tracker.capture_error(
+                            error=ch_error,
+                            error_type=error_type,
+                            guild_id=guild_id,
+                            channel_id=ch_id,
+                            operation=f"fetch_messages ({ch_name})",
+                            details={"task_id": task_id, "channel_name": ch_name},
+                        )
+                        logger.info(f"[{task_id}] Tracked error for channel {ch_name}")
+                except Exception as track_err:
+                    logger.warning(f"[{task_id}] Failed to track channel errors: {track_err}")
 
             logger.info(f"[{task_id}] Total messages collected: {len(all_messages)}")
 
