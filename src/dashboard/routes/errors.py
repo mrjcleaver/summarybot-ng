@@ -144,6 +144,10 @@ def _error_to_detail(error, guild_id: Optional[str] = None) -> ErrorLogDetail:
     )
 
 
+# =============================================================================
+# STATIC PATH ROUTES - Must come before dynamic {error_id} routes
+# =============================================================================
+
 @router.get(
     "/guilds/{guild_id}/errors",
     response_model=ErrorLogsResponse,
@@ -242,88 +246,6 @@ async def get_error_counts(
     )
 
 
-@router.get(
-    "/guilds/{guild_id}/errors/{error_id}",
-    response_model=ErrorLogDetail,
-    summary="Get error details",
-    description="Get full details of a specific error.",
-    responses={
-        403: {"model": ErrorResponse, "description": "No permission"},
-        404: {"model": ErrorResponse, "description": "Error not found"},
-    },
-)
-async def get_error(
-    guild_id: str = Path(..., description="Discord guild ID"),
-    error_id: str = Path(..., description="Error ID"),
-    user: dict = Depends(get_current_user),
-):
-    """Get error details."""
-    _check_guild_access(guild_id, user)
-
-    error_repo = await get_error_repository()
-    if not error_repo:
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
-        )
-
-    error = await error_repo.get_error(error_id)
-    if not error or error.guild_id != guild_id:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "NOT_FOUND", "message": "Error not found"},
-        )
-
-    return _error_to_detail(error, guild_id)
-
-
-@router.post(
-    "/guilds/{guild_id}/errors/{error_id}/resolve",
-    response_model=ErrorLogDetail,
-    summary="Resolve error",
-    description="Mark an error as resolved with optional notes.",
-    responses={
-        403: {"model": ErrorResponse, "description": "No permission"},
-        404: {"model": ErrorResponse, "description": "Error not found"},
-    },
-)
-async def resolve_error(
-    body: ResolveErrorRequest,
-    guild_id: str = Path(..., description="Discord guild ID"),
-    error_id: str = Path(..., description="Error ID"),
-    user: dict = Depends(get_current_user),
-):
-    """Resolve an error."""
-    _check_guild_access(guild_id, user)
-
-    error_repo = await get_error_repository()
-    if not error_repo:
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
-        )
-
-    # Verify error exists and belongs to guild
-    error = await error_repo.get_error(error_id)
-    if not error or error.guild_id != guild_id:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "NOT_FOUND", "message": "Error not found"},
-        )
-
-    # Resolve the error
-    success = await error_repo.resolve_error(error_id, body.notes)
-    if not success:
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "RESOLVE_FAILED", "message": "Failed to resolve error"},
-        )
-
-    # Return updated error
-    error = await error_repo.get_error(error_id)
-    return _error_to_detail(error, guild_id)
-
-
 @router.post(
     "/guilds/{guild_id}/errors/bulk-resolve",
     response_model=BulkResolveResponse,
@@ -369,92 +291,6 @@ async def bulk_resolve_errors(
     logger.info(f"Bulk resolved {resolved_count} errors of type {body.error_type} for guild {guild_id}")
 
     return BulkResolveResponse(resolved_count=resolved_count)
-
-
-# Error types that can potentially be retried
-RETRYABLE_ERROR_TYPES = {
-    "summarization_error": {
-        "retryable": True,
-        "description": "Summary generation can be retried with the same parameters",
-    },
-    "discord_rate_limit": {
-        "retryable": True,
-        "description": "Rate limit has likely expired, operation can be retried",
-    },
-    "discord_connection": {
-        "retryable": True,
-        "description": "Connection issue may be resolved, operation can be retried",
-    },
-    "api_error": {
-        "retryable": True,
-        "description": "External API may be available again",
-    },
-    "webhook_error": {
-        "retryable": True,
-        "description": "Webhook delivery can be retried",
-    },
-}
-
-
-@router.post(
-    "/guilds/{guild_id}/errors/{error_id}/retry",
-    response_model=ErrorRetryResponse,
-    summary="Request error retry",
-    description="Get retry context for an error. Returns whether the error is retryable and the context needed.",
-    responses={
-        403: {"model": ErrorResponse, "description": "No permission"},
-        404: {"model": ErrorResponse, "description": "Error not found"},
-    },
-)
-async def retry_error(
-    guild_id: str = Path(..., description="Discord guild ID"),
-    error_id: str = Path(..., description="Error ID"),
-    user: dict = Depends(get_current_user),
-):
-    """Get retry context for an error."""
-    _check_guild_access(guild_id, user)
-
-    error_repo = await get_error_repository()
-    if not error_repo:
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
-        )
-
-    # Verify error exists and belongs to guild
-    error = await error_repo.get_error(error_id)
-    if not error or error.guild_id != guild_id:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "NOT_FOUND", "message": "Error not found"},
-        )
-
-    # Check if error type is retryable
-    error_type_str = error.error_type.value if hasattr(error.error_type, 'value') else error.error_type
-    retry_info = RETRYABLE_ERROR_TYPES.get(error_type_str)
-
-    if not retry_info or not retry_info["retryable"]:
-        return ErrorRetryResponse(
-            error_id=error_id,
-            retryable=False,
-            retry_context=None,
-            message=f"Error type '{error_type_str}' cannot be automatically retried",
-        )
-
-    # Build retry context from error details
-    retry_context = {
-        "operation": error.operation,
-        "error_type": error_type_str,
-        "channel_id": error.channel_id,
-        **error.details,  # Include any stored details (task_id, scope, etc.)
-    }
-
-    return ErrorRetryResponse(
-        error_id=error_id,
-        retryable=True,
-        retry_context=retry_context,
-        message=retry_info["description"],
-    )
 
 
 @router.get(
@@ -552,4 +388,176 @@ async def export_errors(
         format=format.lower(),
         count=len(errors),
         data=data,
+    )
+
+
+# =============================================================================
+# DYNAMIC PATH ROUTES - Must come after static routes to avoid conflicts
+# =============================================================================
+
+@router.get(
+    "/guilds/{guild_id}/errors/{error_id}",
+    response_model=ErrorLogDetail,
+    summary="Get error details",
+    description="Get full details of a specific error.",
+    responses={
+        403: {"model": ErrorResponse, "description": "No permission"},
+        404: {"model": ErrorResponse, "description": "Error not found"},
+    },
+)
+async def get_error(
+    guild_id: str = Path(..., description="Discord guild ID"),
+    error_id: str = Path(..., description="Error ID"),
+    user: dict = Depends(get_current_user),
+):
+    """Get error details."""
+    _check_guild_access(guild_id, user)
+
+    error_repo = await get_error_repository()
+    if not error_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    error = await error_repo.get_error(error_id)
+    if not error or error.guild_id != guild_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Error not found"},
+        )
+
+    return _error_to_detail(error, guild_id)
+
+
+@router.post(
+    "/guilds/{guild_id}/errors/{error_id}/resolve",
+    response_model=ErrorLogDetail,
+    summary="Resolve error",
+    description="Mark an error as resolved with optional notes.",
+    responses={
+        403: {"model": ErrorResponse, "description": "No permission"},
+        404: {"model": ErrorResponse, "description": "Error not found"},
+    },
+)
+async def resolve_error(
+    body: ResolveErrorRequest,
+    guild_id: str = Path(..., description="Discord guild ID"),
+    error_id: str = Path(..., description="Error ID"),
+    user: dict = Depends(get_current_user),
+):
+    """Resolve an error."""
+    _check_guild_access(guild_id, user)
+
+    error_repo = await get_error_repository()
+    if not error_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    # Verify error exists and belongs to guild
+    error = await error_repo.get_error(error_id)
+    if not error or error.guild_id != guild_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Error not found"},
+        )
+
+    # Resolve the error
+    success = await error_repo.resolve_error(error_id, body.notes)
+    if not success:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "RESOLVE_FAILED", "message": "Failed to resolve error"},
+        )
+
+    # Return updated error
+    error = await error_repo.get_error(error_id)
+    return _error_to_detail(error, guild_id)
+
+
+# Error types that can potentially be retried
+RETRYABLE_ERROR_TYPES = {
+    "summarization_error": {
+        "retryable": True,
+        "description": "Summary generation can be retried with the same parameters",
+    },
+    "discord_rate_limit": {
+        "retryable": True,
+        "description": "Rate limit has likely expired, operation can be retried",
+    },
+    "discord_connection": {
+        "retryable": True,
+        "description": "Connection issue may be resolved, operation can be retried",
+    },
+    "api_error": {
+        "retryable": True,
+        "description": "External API may be available again",
+    },
+    "webhook_error": {
+        "retryable": True,
+        "description": "Webhook delivery can be retried",
+    },
+}
+
+
+@router.post(
+    "/guilds/{guild_id}/errors/{error_id}/retry",
+    response_model=ErrorRetryResponse,
+    summary="Request error retry",
+    description="Get retry context for an error. Returns whether the error is retryable and the context needed.",
+    responses={
+        403: {"model": ErrorResponse, "description": "No permission"},
+        404: {"model": ErrorResponse, "description": "Error not found"},
+    },
+)
+async def retry_error(
+    guild_id: str = Path(..., description="Discord guild ID"),
+    error_id: str = Path(..., description="Error ID"),
+    user: dict = Depends(get_current_user),
+):
+    """Get retry context for an error."""
+    _check_guild_access(guild_id, user)
+
+    error_repo = await get_error_repository()
+    if not error_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    # Verify error exists and belongs to guild
+    error = await error_repo.get_error(error_id)
+    if not error or error.guild_id != guild_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Error not found"},
+        )
+
+    # Check if error type is retryable
+    error_type_str = error.error_type.value if hasattr(error.error_type, 'value') else error.error_type
+    retry_info = RETRYABLE_ERROR_TYPES.get(error_type_str)
+
+    if not retry_info or not retry_info["retryable"]:
+        return ErrorRetryResponse(
+            error_id=error_id,
+            retryable=False,
+            retry_context=None,
+            message=f"Error type '{error_type_str}' cannot be automatically retried",
+        )
+
+    # Build retry context from error details
+    retry_context = {
+        "operation": error.operation,
+        "error_type": error_type_str,
+        "channel_id": error.channel_id,
+        **error.details,  # Include any stored details (task_id, scope, etc.)
+    }
+
+    return ErrorRetryResponse(
+        error_id=error_id,
+        retryable=True,
+        retry_context=retry_context,
+        message=retry_info["description"],
     )
