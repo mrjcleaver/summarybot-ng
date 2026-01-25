@@ -77,13 +77,15 @@ def create_dashboard_router(
 
     # Include sub-routers
     router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+    # Register errors_router before guilds_router to avoid route conflicts
+    # (guilds_router's /{guild_id} pattern would otherwise match /guilds/{id}/errors/...)
+    router.include_router(errors_router, tags=["Errors"])
     router.include_router(guilds_router, prefix="/guilds", tags=["Guilds"])
     router.include_router(summaries_router, tags=["Summaries"])
     router.include_router(schedules_router, tags=["Schedules"])
     router.include_router(webhooks_router, tags=["Webhooks"])
     router.include_router(events_router, tags=["Events"])
     router.include_router(feeds_router, tags=["Feeds"])
-    router.include_router(errors_router, tags=["Errors"])
 
     return router
 
