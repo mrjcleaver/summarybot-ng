@@ -8,6 +8,7 @@ Single source of truth for all default values.
 # Users can configure other models via SUMMARIZATION_MODEL env var or /config command
 DEFAULT_SUMMARIZATION_MODEL = "claude-3-haiku-20240307"
 DEFAULT_BRIEF_MODEL = "claude-3-haiku-20240307"
+DEFAULT_COMPREHENSIVE_MODEL = "claude-3-5-sonnet-20241022"  # Best model for comprehensive summaries
 
 # Valid model choices
 # Note: Only include models verified to work on OpenRouter

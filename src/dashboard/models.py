@@ -262,13 +262,22 @@ class ParticipantResponse(BaseModel):
     key_contributions: List[str] = []
 
 
+class SummaryWarning(BaseModel):
+    """Warning about summary generation."""
+    code: str  # e.g., "model_fallback", "partial_content", "rate_limited"
+    message: str
+    details: Optional[Dict[str, Any]] = None
+
+
 class SummaryMetadataResponse(BaseModel):
     """Summary metadata."""
     summary_length: str = "detailed"
     perspective: str = "general"
-    model_used: Optional[str] = None
+    model_used: Optional[str] = None  # Actual model that generated the summary
+    model_requested: Optional[str] = None  # Originally requested model (may differ due to fallback)
     tokens_used: Optional[int] = None
     generation_time_seconds: Optional[float] = None
+    warnings: List[SummaryWarning] = []  # Any warnings during generation
 
 
 class SummaryDetailResponse(BaseModel):

@@ -53,8 +53,24 @@ class MigrationRunner:
 
             for statement in statements:
                 if statement:
-                    await db.execute(statement)
+                    try:
+                        await db.execute(statement)
+                    except Exception as e:
+                        # Handle expected errors like duplicate columns gracefully
+                        error_msg = str(e).lower()
+                        if 'duplicate column' in error_msg:
+                            logger.warning(f"Column already exists, skipping: {e}")
+                        else:
+                            raise
 
+            await db.commit()
+
+            # Update schema version
+            version = int(migration_file.stem.split('_')[0])
+            await db.execute(
+                "INSERT OR REPLACE INTO schema_version (version, applied_at, description) VALUES (?, datetime('now'), ?)",
+                (version, migration_file.stem)
+            )
             await db.commit()
 
         logger.info(f"Successfully applied migration: {migration_file.name}")

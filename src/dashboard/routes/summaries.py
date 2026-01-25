@@ -191,10 +191,9 @@ async def get_summary(
     # Convert action items
     action_items = [
         ActionItemResponse(
-            description=item.description,
+            text=item.description,
             assignee=item.assignee,
             priority=item.priority.value if hasattr(item.priority, 'value') else item.priority,
-            completed=item.completed,
         )
         for item in summary.action_items
     ]
@@ -220,13 +219,31 @@ async def get_summary(
         for p in summary.participants
     ]
 
-    # Build metadata
+    # Build warnings list
+    from ..models import SummaryWarning
+    warnings = []
+    if hasattr(summary, 'warnings') and summary.warnings:
+        for w in summary.warnings:
+            warnings.append(SummaryWarning(
+                code=w.code,
+                message=w.message,
+                details=w.details if hasattr(w, 'details') else {}
+            ))
+
+    # Debug: log what's in the metadata
+    logger.info(f"Summary {summary.id} metadata keys: {list(summary.metadata.keys())}")
+    logger.info(f"Summary {summary.id} claude_model: {summary.metadata.get('claude_model')}")
+    logger.info(f"Summary {summary.id} total_tokens: {summary.metadata.get('total_tokens')}")
+
+    # Build metadata (engine stores claude_model, requested_model, total_tokens, processing_time)
     metadata = SummaryMetadataResponse(
         summary_length=summary.metadata.get("summary_length", "detailed"),
         perspective=summary.metadata.get("perspective", "general"),
-        model_used=summary.metadata.get("model_used"),
-        tokens_used=summary.metadata.get("tokens_used"),
-        generation_time_seconds=summary.metadata.get("generation_time_seconds"),
+        model_used=summary.metadata.get("claude_model"),
+        model_requested=summary.metadata.get("requested_model"),
+        tokens_used=summary.metadata.get("total_tokens"),
+        generation_time_seconds=summary.metadata.get("processing_time"),
+        warnings=warnings,
     )
 
     # Check if prompt data is available
@@ -465,12 +482,19 @@ async def generate_summary(
 
             # Process messages with relaxed minimum for dashboard
             from ...models.summary import SummaryOptions, SummaryLength
+
+            # Get options from request
+            requested_length = body.options.summary_length if body.options else "detailed"
+            logger.info(f"[{task_id}] Requested summary_length: {requested_length}")
+
             options = SummaryOptions(
-                summary_length=SummaryLength(body.options.summary_length if body.options else "detailed"),
+                summary_length=SummaryLength(requested_length),
                 extract_action_items=body.options.include_action_items if body.options else True,
                 extract_technical_terms=body.options.include_technical_terms if body.options else True,
                 min_messages=1,  # Allow single message summaries from dashboard
             )
+
+            logger.info(f"[{task_id}] SummaryOptions created: summary_length={options.summary_length.value}, max_tokens={options.get_max_tokens_for_length()}")
 
             logger.info(f"[{task_id}] Processing {len(all_messages)} messages...")
             processor = MessageProcessor(bot.client)

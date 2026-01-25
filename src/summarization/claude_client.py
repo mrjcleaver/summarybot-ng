@@ -40,6 +40,7 @@ class ClaudeResponse(BaseModel):
     stop_reason: str
     response_id: str = ""
     created_at: datetime = field(default_factory=datetime.utcnow)
+    fallback_info: Dict[str, Any] = field(default_factory=dict)  # Tracks model fallback details
     
     @property
     def input_tokens(self) -> int:
@@ -96,6 +97,7 @@ class ClaudeClient:
         "claude-3-opus-20240229": (0.015, 0.075),
         "claude-3-haiku-20240307": (0.00025, 0.00125),
         "claude-3-5-sonnet-20240620": (0.003, 0.015),
+        "claude-3-5-sonnet-20241022": (0.003, 0.015),  # Latest Sonnet 3.5
     }
     
     def __init__(self, api_key: str, base_url: Optional[str] = None,
@@ -128,6 +130,16 @@ class ClaudeClient:
         self._last_request_time = 0
         self._min_request_interval = 0.1  # Minimum seconds between requests
 
+    # Fallback model preferences for comprehensive summaries (in priority order)
+    COMPREHENSIVE_MODEL_FALLBACKS = [
+        'anthropic/claude-3.5-sonnet:beta',
+        'anthropic/claude-3.5-sonnet',
+        'anthropic/claude-3-5-sonnet-20241022',
+        'anthropic/claude-3-5-sonnet-20240620',
+        'anthropic/claude-3-opus',
+        'anthropic/claude-3-haiku',  # Last resort
+    ]
+
     async def close(self):
         """Close the Claude client and cleanup resources.
 
@@ -137,6 +149,57 @@ class ClaudeClient:
         # The AsyncAnthropic client doesn't require explicit cleanup
         # This method exists for compatibility with container lifecycle
         pass
+
+    async def get_available_models(self) -> List[str]:
+        """Query OpenRouter for available Claude models.
+
+        Returns:
+            List of available model IDs
+        """
+        if not self.is_openrouter:
+            return list(self.MODEL_COSTS.keys())
+
+        import httpx
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    models = [m['id'] for m in data.get('data', []) if 'claude' in m['id'].lower()]
+                    logger.info(f"OpenRouter available Claude models: {models}")
+                    return models
+                else:
+                    logger.warning(f"Failed to fetch OpenRouter models: {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Error fetching OpenRouter models: {e}")
+
+        # Return default fallback list if query fails
+        return self.COMPREHENSIVE_MODEL_FALLBACKS
+
+    async def find_available_model(self, preferred_models: List[str]) -> Optional[str]:
+        """Find the first available model from a list of preferences.
+
+        Args:
+            preferred_models: List of model IDs in priority order
+
+        Returns:
+            First available model ID, or None if none available
+        """
+        available = await self.get_available_models()
+        available_set = set(available)
+
+        for model in preferred_models:
+            if model in available_set:
+                return model
+
+        return None
 
     def _normalize_model_name(self, model: str) -> str:
         """Normalize model name for the current provider.
@@ -153,11 +216,11 @@ class ClaudeClient:
         # Mapping from Claude Direct model names to OpenRouter model names
         # Note: Claude 3.0 Sonnet is not available on OpenRouter, use 3.5 Sonnet instead
         openrouter_model_map = {
-            'claude-3-sonnet-20240229': 'anthropic/claude-3.5-sonnet',  # Upgraded to 3.5
+            'claude-3-sonnet-20240229': 'anthropic/claude-3.5-sonnet:beta',  # Upgraded to 3.5
             'claude-3-opus-20240229': 'anthropic/claude-3-opus',
             'claude-3-haiku-20240307': 'anthropic/claude-3-haiku',
-            'claude-3-5-sonnet-20240620': 'anthropic/claude-3.5-sonnet',
-            'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet',
+            'claude-3-5-sonnet-20240620': 'anthropic/claude-3.5-sonnet:beta',
+            'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet:beta',
         }
 
         if self.is_openrouter:
@@ -328,7 +391,98 @@ class ClaudeClient:
         
         # Should not reach here due to loop logic
         raise ClaudeAPIError("Max retries exceeded", "max_retries_exceeded")
-    
+
+    async def create_summary_with_fallback(self,
+                                           prompt: str,
+                                           system_prompt: str,
+                                           options: ClaudeOptions,
+                                           fallback_models: Optional[List[str]] = None) -> ClaudeResponse:
+        """Create a summary with automatic fallback to alternative models.
+
+        Args:
+            prompt: User prompt with content to summarize
+            system_prompt: System prompt with instructions
+            options: API request options
+            fallback_models: Optional list of fallback model IDs to try
+
+        Returns:
+            ClaudeResponse with generated summary
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Use default fallbacks if none provided
+        if fallback_models is None:
+            fallback_models = self.COMPREHENSIVE_MODEL_FALLBACKS
+
+        # Build list of models to try (preferred first, then fallbacks)
+        models_to_try = [self._normalize_model_name(options.model)]
+        for fallback in fallback_models:
+            normalized = self._normalize_model_name(fallback) if not fallback.startswith('anthropic/') else fallback
+            if normalized not in models_to_try:
+                models_to_try.append(normalized)
+
+        last_error = None
+        tried_models = []
+        original_model = models_to_try[0] if models_to_try else options.model
+
+        for model in models_to_try:
+            tried_models.append(model)
+            try:
+                # Create new options with the current model
+                current_options = ClaudeOptions(
+                    model=model if model.startswith('anthropic/') else options.model,
+                    max_tokens=options.max_tokens,
+                    temperature=options.temperature,
+                    top_p=options.top_p,
+                    top_k=options.top_k,
+                    stop_sequences=options.stop_sequences,
+                    stream=options.stream,
+                )
+
+                # Try directly with the normalized model
+                await self._apply_rate_limiting()
+                request_params = self._build_request_params(prompt, system_prompt, current_options, model)
+                response = await self._make_request(request_params, 0)
+                claude_response = self._process_response(response, model)
+
+                # Track fallback info in response metadata
+                if len(tried_models) > 1:
+                    logger.warning(f"Model fallback occurred: requested={original_model}, used={model}, tried={tried_models}")
+                    claude_response.fallback_info = {
+                        "occurred": True,
+                        "requested_model": original_model,
+                        "actual_model": model,
+                        "tried_models": tried_models,
+                        "failed_models": tried_models[:-1]
+                    }
+                else:
+                    claude_response.fallback_info = {"occurred": False}
+
+                logger.info(f"Summary created successfully with model {model}")
+                cost = self._calculate_cost(claude_response)
+                self.usage_stats.add_request(claude_response, cost)
+                return claude_response
+
+            except (anthropic.NotFoundError, ModelUnavailableError) as e:
+                logger.warning(f"Model {model} not available, trying next fallback: {e}")
+                last_error = e
+                continue
+            except Exception as e:
+                # For other errors, don't try fallbacks - just raise
+                logger.error(f"Error with model {model}: {e}")
+                raise
+
+        # All models failed
+        raise ModelUnavailableError(
+            options.model,
+            context={
+                "tried_models": tried_models,
+                "last_error": str(last_error),
+                "is_openrouter": self.is_openrouter
+            }
+        )
+
     async def health_check(self) -> bool:
         """Check if Claude API is accessible.
 

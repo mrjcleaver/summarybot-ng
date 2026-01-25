@@ -3,6 +3,7 @@ Main summarization engine coordinating all components.
 """
 
 import asyncio
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from ..exceptions import (
     SummarizationError, InsufficientContentError, PromptTooLongError,
     create_error_context
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -170,14 +173,28 @@ class SummarizationEngine:
                 max_tokens=options.get_max_tokens_for_length(),
                 temperature=options.temperature
             )
-            
-            # Call Claude API
-            response = await self.claude_client.create_summary(
-                prompt=prompt_data.user_prompt,
-                system_prompt=prompt_data.system_prompt,
-                options=claude_options
-            )
-            
+
+            logger.info(f"Summarization engine: summary_length={options.summary_length.value}, model={claude_options.model}, max_tokens={claude_options.max_tokens}")
+            logger.info(f"System prompt length: {len(prompt_data.system_prompt)} chars, User prompt length: {len(prompt_data.user_prompt)} chars")
+
+            # Call Claude API - use fallback method for comprehensive summaries
+            from ..models.summary import SummaryLength
+            if options.summary_length == SummaryLength.COMPREHENSIVE:
+                logger.info("Using fallback-enabled API call for comprehensive summary")
+                response = await self.claude_client.create_summary_with_fallback(
+                    prompt=prompt_data.user_prompt,
+                    system_prompt=prompt_data.system_prompt,
+                    options=claude_options
+                )
+            else:
+                response = await self.claude_client.create_summary(
+                    prompt=prompt_data.user_prompt,
+                    system_prompt=prompt_data.system_prompt,
+                    options=claude_options
+                )
+
+            logger.info(f"Claude API response: input_tokens={response.input_tokens}, output_tokens={response.output_tokens}, content_length={len(response.content)}")
+
             # Parse response
             parsed_summary = self.response_parser.parse_summary_response(
                 response_content=response.content,
@@ -201,7 +218,8 @@ class SummarizationEngine:
             
             # Add API usage metadata and summary options
             summary_result.metadata.update({
-                "claude_model": response.model,
+                "claude_model": response.model,  # Actual model used (may differ due to fallback)
+                "requested_model": claude_options.model,  # Originally requested model
                 "input_tokens": response.input_tokens,
                 "output_tokens": response.output_tokens,
                 "total_tokens": response.total_tokens,
@@ -210,6 +228,21 @@ class SummarizationEngine:
                 "summary_length": options.summary_length.value,
                 "perspective": options.perspective
             })
+
+            # Check for model fallback and add warning
+            fallback_info = getattr(response, 'fallback_info', {})
+            if fallback_info.get('occurred'):
+                summary_result.add_warning(
+                    code="model_fallback",
+                    message=f"Requested model '{fallback_info.get('requested_model')}' was not available. Used '{fallback_info.get('actual_model')}' instead.",
+                    details={
+                        "requested_model": fallback_info.get('requested_model'),
+                        "actual_model": fallback_info.get('actual_model'),
+                        "tried_models": fallback_info.get('tried_models', []),
+                        "failed_models": fallback_info.get('failed_models', [])
+                    }
+                )
+                logger.warning(f"Model fallback warning added to summary: {fallback_info}")
 
             # Store prompt and source content for transparency
             summary_result.prompt_system = prompt_data.system_prompt

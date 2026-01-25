@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 
 from .base import BaseModel, generate_id, utc_now
-from ..config.constants import DEFAULT_SUMMARIZATION_MODEL, DEFAULT_BRIEF_MODEL
+from ..config.constants import DEFAULT_SUMMARIZATION_MODEL, DEFAULT_BRIEF_MODEL, DEFAULT_COMPREHENSIVE_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,14 @@ class Priority(Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+@dataclass
+class SummaryWarning(BaseModel):
+    """Warning generated during summary creation."""
+    code: str  # e.g., "model_fallback", "partial_content", "permission_error"
+    message: str
+    details: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -118,7 +126,17 @@ class SummaryResult(BaseModel):
     prompt_user: Optional[str] = None  # User prompt with formatted messages
     prompt_template_id: Optional[str] = None  # Custom prompt template ID if used
     source_content: Optional[str] = None  # Original messages in readable format
-    
+    # Warnings generated during summary creation
+    warnings: List[SummaryWarning] = field(default_factory=list)
+
+    def add_warning(self, code: str, message: str, details: Dict[str, Any] = None):
+        """Add a warning to the summary."""
+        self.warnings.append(SummaryWarning(
+            code=code,
+            message=message,
+            details=details or {}
+        ))
+
     def to_embed_dict(self) -> Dict[str, Any]:
         """Convert to Discord embed dictionary."""
         embed = {
@@ -354,7 +372,8 @@ class SummaryOptions(BaseModel):
         Get the appropriate model based on summary length.
 
         For BRIEF summaries, automatically use Haiku for speed and cost efficiency.
-        For DETAILED/COMPREHENSIVE summaries, use the configured model.
+        For COMPREHENSIVE summaries, use the best available model for quality.
+        For DETAILED summaries, use the configured model.
 
         Returns:
             Model identifier string (e.g., 'claude-3-haiku-20240307')
@@ -362,5 +381,8 @@ class SummaryOptions(BaseModel):
         if self.summary_length == SummaryLength.BRIEF:
             return DEFAULT_BRIEF_MODEL
 
-        # For detailed and comprehensive, use configured model
+        if self.summary_length == SummaryLength.COMPREHENSIVE:
+            return DEFAULT_COMPREHENSIVE_MODEL
+
+        # For detailed, use configured model
         return self.summarization_model

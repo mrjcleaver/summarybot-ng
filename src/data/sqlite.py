@@ -32,7 +32,8 @@ from ..models.summary import (
     Participant,
     SummarizationContext,
     Priority,
-    SummaryLength
+    SummaryLength,
+    SummaryWarning
 )
 from ..models.task import (
     ScheduledTask,
@@ -180,9 +181,14 @@ class SQLiteSummaryRepository(SummaryRepository):
             id, channel_id, guild_id, start_time, end_time,
             message_count, summary_text, key_points, action_items,
             technical_terms, participants, metadata, created_at, context,
-            prompt_system, prompt_user, prompt_template_id, source_content
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            prompt_system, prompt_user, prompt_template_id, source_content, warnings
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
+
+        # Serialize warnings
+        warnings_data = []
+        if hasattr(summary, 'warnings') and summary.warnings:
+            warnings_data = [w.to_dict() if hasattr(w, 'to_dict') else {'code': w.code, 'message': w.message, 'details': getattr(w, 'details', {})} for w in summary.warnings]
 
         params = (
             summary.id,
@@ -203,6 +209,7 @@ class SQLiteSummaryRepository(SummaryRepository):
             summary.prompt_user,
             summary.prompt_template_id,
             summary.source_content,
+            json.dumps(warnings_data),
         )
 
         await self.connection.execute(query, params)
@@ -306,6 +313,10 @@ class SQLiteSummaryRepository(SummaryRepository):
         context_data = json.loads(row['context'])
         context = SummarizationContext(**context_data) if context_data else None
 
+        # Load warnings if present
+        warnings_data = json.loads(row.get('warnings') or '[]')
+        warnings = [SummaryWarning(**w) for w in warnings_data]
+
         return SummaryResult(
             id=row['id'],
             channel_id=row['channel_id'],
@@ -325,6 +336,7 @@ class SQLiteSummaryRepository(SummaryRepository):
             prompt_user=row.get('prompt_user'),
             prompt_template_id=row.get('prompt_template_id'),
             source_content=row.get('source_content'),
+            warnings=warnings,
         )
 
 
