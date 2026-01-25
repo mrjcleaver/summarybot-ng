@@ -916,6 +916,25 @@ class SQLiteErrorRepository(ErrorRepository):
 
         return {row['error_type']: row['count'] for row in rows}
 
+    async def bulk_resolve_by_type(
+        self,
+        guild_id: str,
+        error_type: ErrorType,
+        notes: Optional[str] = None,
+    ) -> int:
+        """Resolve all unresolved errors of a specific type for a guild."""
+        query = """
+        UPDATE error_logs
+        SET resolved_at = ?, resolution_notes = ?
+        WHERE guild_id = ? AND error_type = ? AND resolved_at IS NULL
+        """
+        error_type_value = error_type.value if isinstance(error_type, ErrorType) else error_type
+        cursor = await self.connection.execute(
+            query,
+            (datetime.utcnow().isoformat(), notes, guild_id, error_type_value)
+        )
+        return cursor.rowcount
+
     def _row_to_error(self, row: Dict[str, Any]) -> ErrorLog:
         """Convert database row to ErrorLog object."""
         return ErrorLog(

@@ -548,6 +548,26 @@ class ErrorRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def bulk_resolve_by_type(
+        self,
+        guild_id: str,
+        error_type: ErrorType,
+        notes: Optional[str] = None,
+    ) -> int:
+        """
+        Resolve all unresolved errors of a specific type for a guild.
+
+        Args:
+            guild_id: The guild to resolve errors for
+            error_type: The type of errors to resolve
+            notes: Optional resolution notes
+
+        Returns:
+            Number of errors resolved
+        """
+        pass
+
 
 class DatabaseConnection(ABC):
     """Abstract database connection interface."""

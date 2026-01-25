@@ -608,3 +608,35 @@ class ErrorCountsResponse(BaseModel):
 class ResolveErrorRequest(BaseModel):
     """Request to resolve an error."""
     notes: Optional[str] = None
+
+
+class BulkResolveRequest(BaseModel):
+    """Request to bulk resolve errors by type."""
+    error_type: str  # e.g., "discord_permission", "api_error"
+    notes: Optional[str] = None
+
+
+class BulkResolveResponse(BaseModel):
+    """Response for bulk resolve operation."""
+    resolved_count: int
+
+
+class ErrorRetryResponse(BaseModel):
+    """Response for error retry request."""
+    error_id: str
+    retryable: bool
+    retry_context: Optional[Dict[str, Any]] = None  # Context needed to retry
+    message: str
+
+
+class ErrorExportFormat(str, Enum):
+    """Export format options."""
+    CSV = "csv"
+    JSON = "json"
+
+
+class ErrorExportResponse(BaseModel):
+    """Response for error export."""
+    format: str
+    count: int
+    data: str  # CSV string or JSON string

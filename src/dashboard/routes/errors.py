@@ -15,6 +15,10 @@ from ..models import (
     ErrorLogDetail,
     ErrorCountsResponse,
     ResolveErrorRequest,
+    BulkResolveRequest,
+    BulkResolveResponse,
+    ErrorRetryResponse,
+    ErrorExportResponse,
     ErrorResponse,
 )
 from . import get_discord_bot
@@ -318,3 +322,234 @@ async def resolve_error(
     # Return updated error
     error = await error_repo.get_error(error_id)
     return _error_to_detail(error, guild_id)
+
+
+@router.post(
+    "/guilds/{guild_id}/errors/bulk-resolve",
+    response_model=BulkResolveResponse,
+    summary="Bulk resolve errors",
+    description="Resolve all unresolved errors of a specific type for a guild.",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid error type"},
+        403: {"model": ErrorResponse, "description": "No permission"},
+    },
+)
+async def bulk_resolve_errors(
+    body: BulkResolveRequest,
+    guild_id: str = Path(..., description="Discord guild ID"),
+    user: dict = Depends(get_current_user),
+):
+    """Bulk resolve errors by type."""
+    _check_guild_access(guild_id, user)
+
+    error_repo = await get_error_repository()
+    if not error_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    # Convert string to ErrorType enum
+    from ...models.error_log import ErrorType
+    try:
+        error_type = ErrorType(body.error_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_ERROR_TYPE", "message": f"Invalid error type: {body.error_type}"},
+        )
+
+    # Bulk resolve
+    resolved_count = await error_repo.bulk_resolve_by_type(
+        guild_id=guild_id,
+        error_type=error_type,
+        notes=body.notes,
+    )
+
+    logger.info(f"Bulk resolved {resolved_count} errors of type {body.error_type} for guild {guild_id}")
+
+    return BulkResolveResponse(resolved_count=resolved_count)
+
+
+# Error types that can potentially be retried
+RETRYABLE_ERROR_TYPES = {
+    "summarization_error": {
+        "retryable": True,
+        "description": "Summary generation can be retried with the same parameters",
+    },
+    "discord_rate_limit": {
+        "retryable": True,
+        "description": "Rate limit has likely expired, operation can be retried",
+    },
+    "discord_connection": {
+        "retryable": True,
+        "description": "Connection issue may be resolved, operation can be retried",
+    },
+    "api_error": {
+        "retryable": True,
+        "description": "External API may be available again",
+    },
+    "webhook_error": {
+        "retryable": True,
+        "description": "Webhook delivery can be retried",
+    },
+}
+
+
+@router.post(
+    "/guilds/{guild_id}/errors/{error_id}/retry",
+    response_model=ErrorRetryResponse,
+    summary="Request error retry",
+    description="Get retry context for an error. Returns whether the error is retryable and the context needed.",
+    responses={
+        403: {"model": ErrorResponse, "description": "No permission"},
+        404: {"model": ErrorResponse, "description": "Error not found"},
+    },
+)
+async def retry_error(
+    guild_id: str = Path(..., description="Discord guild ID"),
+    error_id: str = Path(..., description="Error ID"),
+    user: dict = Depends(get_current_user),
+):
+    """Get retry context for an error."""
+    _check_guild_access(guild_id, user)
+
+    error_repo = await get_error_repository()
+    if not error_repo:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database not available"},
+        )
+
+    # Verify error exists and belongs to guild
+    error = await error_repo.get_error(error_id)
+    if not error or error.guild_id != guild_id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Error not found"},
+        )
+
+    # Check if error type is retryable
+    error_type_str = error.error_type.value if hasattr(error.error_type, 'value') else error.error_type
+    retry_info = RETRYABLE_ERROR_TYPES.get(error_type_str)
+
+    if not retry_info or not retry_info["retryable"]:
+        return ErrorRetryResponse(
+            error_id=error_id,
+            retryable=False,
+            retry_context=None,
+            message=f"Error type '{error_type_str}' cannot be automatically retried",
+        )
+
+    # Build retry context from error details
+    retry_context = {
+        "operation": error.operation,
+        "error_type": error_type_str,
+        "channel_id": error.channel_id,
+        **error.details,  # Include any stored details (task_id, scope, etc.)
+    }
+
+    return ErrorRetryResponse(
+        error_id=error_id,
+        retryable=True,
+        retry_context=retry_context,
+        message=retry_info["description"],
+    )
+
+
+@router.get(
+    "/guilds/{guild_id}/errors/export",
+    response_model=ErrorExportResponse,
+    summary="Export errors",
+    description="Export errors for a guild in CSV or JSON format.",
+    responses={
+        403: {"model": ErrorResponse, "description": "No permission"},
+    },
+)
+async def export_errors(
+    guild_id: str = Path(..., description="Discord guild ID"),
+    format: str = Query("csv", description="Export format: csv or json"),
+    error_type: Optional[str] = Query(None, description="Filter by error type"),
+    include_resolved: bool = Query(True, description="Include resolved errors"),
+    limit: int = Query(500, ge=1, le=1000, description="Maximum errors to export"),
+    user: dict = Depends(get_current_user),
+):
+    """Export errors in CSV or JSON format."""
+    _check_guild_access(guild_id, user)
+
+    error_repo = await get_error_repository()
+    if not error_repo:
+        return ErrorExportResponse(format=format, count=0, data="")
+
+    # Convert filter
+    from ...models.error_log import ErrorType
+    type_filter = None
+    if error_type:
+        try:
+            type_filter = ErrorType(error_type)
+        except ValueError:
+            pass
+
+    # Fetch errors
+    errors = await error_repo.get_errors_by_guild(
+        guild_id=guild_id,
+        limit=limit,
+        error_type=type_filter,
+        include_resolved=include_resolved,
+    )
+
+    if format.lower() == "json":
+        import json
+        error_dicts = []
+        for err in errors:
+            error_dicts.append({
+                "id": err.id,
+                "error_type": err.error_type.value if hasattr(err.error_type, 'value') else err.error_type,
+                "severity": err.severity.value if hasattr(err.severity, 'value') else err.severity,
+                "error_code": err.error_code,
+                "message": err.message,
+                "operation": err.operation,
+                "channel_id": err.channel_id,
+                "created_at": err.created_at.isoformat() if err.created_at else None,
+                "resolved_at": err.resolved_at.isoformat() if err.resolved_at else None,
+                "resolution_notes": err.resolution_notes,
+                "details": err.details,
+            })
+        data = json.dumps(error_dicts, indent=2)
+    else:
+        # CSV format
+        import io
+        import csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header
+        writer.writerow([
+            "ID", "Error Type", "Severity", "Error Code", "Message",
+            "Operation", "Channel ID", "Created At", "Resolved At", "Resolution Notes"
+        ])
+
+        # Data rows
+        for err in errors:
+            writer.writerow([
+                err.id,
+                err.error_type.value if hasattr(err.error_type, 'value') else err.error_type,
+                err.severity.value if hasattr(err.severity, 'value') else err.severity,
+                err.error_code or "",
+                err.message,
+                err.operation,
+                err.channel_id or "",
+                err.created_at.isoformat() if err.created_at else "",
+                err.resolved_at.isoformat() if err.resolved_at else "",
+                err.resolution_notes or "",
+            ])
+
+        data = output.getvalue()
+
+    logger.info(f"Exported {len(errors)} errors for guild {guild_id} in {format} format")
+
+    return ErrorExportResponse(
+        format=format.lower(),
+        count=len(errors),
+        data=data,
+    )
