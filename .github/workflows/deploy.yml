@@ -33,8 +33,11 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::warning::RAILWAY_TOKEN not configured, skipping Railway deployment"
+            exit 0
+          fi
           railway up --service summarybot-ng
-        continue-on-error: true
 
   deploy-render:
     name: Deploy to Render
@@ -68,12 +71,16 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN secret is not configured"
+            exit 1
+          fi
           if [ -f fly.toml ]; then
             flyctl deploy --remote-only
           else
-            echo "fly.toml not found, skipping Fly.io deployment..."
+            echo "::error::fly.toml not found"
+            exit 1
           fi
-        continue-on-error: true
 
   notify:
     name: Notify Deployment Status
