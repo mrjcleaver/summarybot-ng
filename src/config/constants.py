@@ -12,7 +12,9 @@ DEFAULT_BRIEF_MODEL = "anthropic/claude-3-haiku"
 DEFAULT_COMPREHENSIVE_MODEL = "anthropic/claude-sonnet-4.5"  # Best model for comprehensive summaries
 
 # Valid model choices (current OpenRouter model IDs as of 2026-01)
+# Also includes legacy names for backward compatibility
 VALID_MODELS = [
+    # Current OpenRouter format
     "anthropic/claude-sonnet-4.5",
     "anthropic/claude-sonnet-4",
     "anthropic/claude-3.7-sonnet",
@@ -21,6 +23,12 @@ VALID_MODELS = [
     "anthropic/claude-3-haiku",
     "anthropic/claude-opus-4.5",
     "anthropic/claude-opus-4",
+    # Legacy format (for backward compatibility)
+    "claude-3-haiku-20240307",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-opus-20240229",
+    "claude-3-sonnet-20240229",
 ]
 
 # Model aliases for backward compatibility (old format -> new format)
