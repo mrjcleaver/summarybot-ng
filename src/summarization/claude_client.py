@@ -131,13 +131,14 @@ class ClaudeClient:
         self._min_request_interval = 0.1  # Minimum seconds between requests
 
     # Fallback model preferences for comprehensive summaries (in priority order)
+    # Updated 2026-01 to match current OpenRouter model IDs
     COMPREHENSIVE_MODEL_FALLBACKS = [
-        'anthropic/claude-3.5-sonnet:beta',
-        'anthropic/claude-3.5-sonnet',
-        'anthropic/claude-3-5-sonnet-20241022',
-        'anthropic/claude-3-5-sonnet-20240620',
-        'anthropic/claude-3-opus',
-        'anthropic/claude-3-haiku',  # Last resort
+        'anthropic/claude-sonnet-4.5',   # Latest Sonnet
+        'anthropic/claude-sonnet-4',     # Sonnet 4
+        'anthropic/claude-3.7-sonnet',   # Sonnet 3.7
+        'anthropic/claude-3.5-sonnet',   # Sonnet 3.5
+        'anthropic/claude-3.5-haiku',    # Haiku 3.5 (fallback)
+        'anthropic/claude-3-haiku',      # Haiku 3 (last resort)
     ]
 
     async def close(self):
@@ -213,14 +214,14 @@ class ClaudeClient:
         Returns:
             Normalized model name for the current provider
         """
-        # Mapping from Claude Direct model names to OpenRouter model names
-        # Note: Claude 3.0 Sonnet is not available on OpenRouter, use 3.5 Sonnet instead
+        # Mapping from old Claude Direct model names to current OpenRouter model IDs
+        # Updated 2026-01 to use current OpenRouter model IDs
         openrouter_model_map = {
-            'claude-3-sonnet-20240229': 'anthropic/claude-3.5-sonnet:beta',  # Upgraded to 3.5
-            'claude-3-opus-20240229': 'anthropic/claude-3-opus',
+            'claude-3-sonnet-20240229': 'anthropic/claude-3.5-sonnet',
+            'claude-3-opus-20240229': 'anthropic/claude-opus-4',
             'claude-3-haiku-20240307': 'anthropic/claude-3-haiku',
-            'claude-3-5-sonnet-20240620': 'anthropic/claude-3.5-sonnet:beta',
-            'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet:beta',
+            'claude-3-5-sonnet-20240620': 'anthropic/claude-3.5-sonnet',
+            'claude-3-5-sonnet-20241022': 'anthropic/claude-3.5-sonnet',
         }
 
         if self.is_openrouter:
