@@ -19,6 +19,7 @@ class ErrorType(Enum):
     API_ERROR = "api_error"                    # External API failures
     DATABASE_ERROR = "database_error"          # Database operations
     SUMMARIZATION_ERROR = "summarization_error"  # LLM/summarization failures
+    MODEL_FALLBACK = "model_fallback"          # Model unavailable, used fallback
     SCHEDULE_ERROR = "schedule_error"          # Scheduled task failures
     WEBHOOK_ERROR = "webhook_error"            # Webhook delivery failures
     AUTHENTICATION_ERROR = "authentication_error"  # Auth failures

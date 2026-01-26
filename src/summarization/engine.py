@@ -244,6 +244,36 @@ class SummarizationEngine:
                 )
                 logger.warning(f"Model fallback warning added to summary: {fallback_info}")
 
+                # Track fallback in error log for visibility
+                try:
+                    from ..logging.error_tracker import initialize_error_tracker
+                    from ..models.error_log import ErrorType, ErrorSeverity
+
+                    tracker = await initialize_error_tracker()
+
+                    # Create a simple exception to pass to capture_error
+                    fallback_exception = Exception(
+                        f"Model fallback: {fallback_info.get('requested_model')} -> {fallback_info.get('actual_model')}"
+                    )
+
+                    await tracker.capture_error(
+                        error=fallback_exception,
+                        error_type=ErrorType.MODEL_FALLBACK,
+                        severity=ErrorSeverity.WARNING,
+                        guild_id=context.guild_id if context else None,
+                        channel_id=context.channel_ids[0] if context and context.channel_ids else None,
+                        operation="summarization_model_selection",
+                        details={
+                            "requested_model": fallback_info.get('requested_model'),
+                            "actual_model": fallback_info.get('actual_model'),
+                            "tried_models": fallback_info.get('tried_models', []),
+                            "failed_models": fallback_info.get('failed_models', []),
+                            "summary_id": summary_result.id,
+                        }
+                    )
+                except Exception as track_error:
+                    logger.warning(f"Failed to track model fallback in error log: {track_error}")
+
             # Store prompt and source content for transparency
             summary_result.prompt_system = prompt_data.system_prompt
             summary_result.prompt_user = prompt_data.user_prompt
