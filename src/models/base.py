@@ -4,19 +4,39 @@ Base model classes for Summary Bot NG.
 
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from datetime import datetime
+from enum import Enum
 from typing import Dict, Any, Optional
 import uuid
+
+
+def _serialize_value(value: Any) -> Any:
+    """Serialize a value, handling enums and nested objects."""
+    if isinstance(value, Enum):
+        return value.value
+    elif isinstance(value, datetime):
+        return value.isoformat()
+    elif isinstance(value, list):
+        return [_serialize_value(item) for item in value]
+    elif isinstance(value, dict):
+        return {k: _serialize_value(v) for k, v in value.items()}
+    elif hasattr(value, 'to_dict'):
+        return value.to_dict()
+    return value
 
 
 @dataclass
 class BaseModel:
     """Base model class with common functionality."""
-    
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert model to dictionary."""
-        return asdict(self)
+        """Convert model to dictionary, properly serializing enums."""
+        result = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            result[f.name] = _serialize_value(value)
+        return result
     
     def to_json(self) -> str:
         """Convert model to JSON string."""

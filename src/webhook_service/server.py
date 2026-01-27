@@ -133,6 +133,10 @@ class WebhookServer:
 
     def _setup_routes(self) -> None:
         """Configure API routes."""
+        # Get build info from environment
+        build_number = os.environ.get("BUILD_NUMBER", os.environ.get("GIT_COMMIT", "dev"))
+        build_date = os.environ.get("BUILD_DATE", "")
+
         # Health check endpoint
         @self.app.get("/health", tags=["Health"])
         async def health_check():
@@ -151,6 +155,8 @@ class WebhookServer:
                     content={
                         "status": status,
                         "version": "2.0.0",
+                        "build": build_number,
+                        "build_date": build_date,
                         "services": {
                             "summarization_engine": engine_health.get("status"),
                             "claude_api": engine_health.get("claude_api"),
@@ -167,6 +173,8 @@ class WebhookServer:
                     content={
                         "status": "degraded",
                         "version": "2.0.0",
+                        "build": build_number,
+                        "build_date": build_date,
                         "error": str(e)
                     }
                 )
@@ -178,6 +186,8 @@ class WebhookServer:
             return {
                 "name": "Summary Bot NG API",
                 "version": "2.0.0",
+                "build": build_number,
+                "build_date": build_date,
                 "docs": "/docs",
                 "health": "/health"
             }

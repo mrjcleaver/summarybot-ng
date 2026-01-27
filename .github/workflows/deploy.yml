@@ -76,7 +76,11 @@ jobs:
             exit 1
           fi
           if [ -f fly.toml ]; then
-            flyctl deploy --remote-only
+            BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            BUILD_NUMBER="${GITHUB_SHA:0:7}"
+            flyctl deploy --remote-only \
+              --build-arg BUILD_NUMBER="$BUILD_NUMBER" \
+              --build-arg BUILD_DATE="$BUILD_DATE"
           else
             echo "::error::fly.toml not found"
             exit 1

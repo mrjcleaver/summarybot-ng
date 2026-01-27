@@ -30,6 +30,10 @@ RUN poetry install --only main --no-root --no-interaction --no-ansi
 # Stage 2: Runtime
 FROM python:3.11-slim
 
+# Build arguments for versioning
+ARG BUILD_NUMBER=dev
+ARG BUILD_DATE=
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
@@ -67,7 +71,9 @@ EXPOSE 5000
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    BUILD_NUMBER=${BUILD_NUMBER} \
+    BUILD_DATE=${BUILD_DATE}
 
 # Run the application
 CMD ["python", "-m", "src.main"]
