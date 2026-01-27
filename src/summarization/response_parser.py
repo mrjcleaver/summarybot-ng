@@ -327,16 +327,48 @@ class ResponseParser:
         logger.warning("Falling back to freeform parser - JSON/Markdown parsing failed")
 
         # Strip code blocks to avoid embedding raw JSON/code
-        # Remove ```json ... ``` or ``` ... ``` blocks
+        # Remove ```json ... ``` or ``` ... ``` blocks (complete blocks)
         cleaned_content = re.sub(r'```(?:json)?\s*.*?\s*```', '', content, flags=re.DOTALL)
+
+        # Also remove incomplete code blocks (```json at start without closing ```)
+        cleaned_content = re.sub(r'```(?:json)?\s*\{.*', '', cleaned_content, flags=re.DOTALL)
+
+        # Remove any standalone JSON objects that weren't in code blocks
+        # Match { ... } that looks like JSON (contains "key": patterns)
+        cleaned_content = re.sub(r'\{\s*"[^"]+"\s*:.*?\}(?=\s*$|\s*\n\s*\n)', '', cleaned_content, flags=re.DOTALL)
+
+        # Remove incomplete JSON at the end (starts with { but doesn't close)
+        cleaned_content = re.sub(r'\{\s*"[^"]+"\s*:.*$', '', cleaned_content, flags=re.DOTALL)
+
+        # Remove any lines that look like JSON properties
+        lines = cleaned_content.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            stripped = line.strip()
+            # Skip lines that look like JSON (start with ", {, }, or contain ": )
+            if stripped.startswith('"') and '":' in stripped:
+                continue
+            if stripped in ['{', '}', '[', ']', '},', '],']:
+                continue
+            if re.match(r'^\s*"[^"]+"\s*:\s*[\[\{"\d]', stripped):
+                continue
+            cleaned_lines.append(line)
+
+        cleaned_content = '\n'.join(cleaned_lines).strip()
 
         # Use the cleaned content as summary text
         summary_text = cleaned_content.strip()
 
-        # If nothing left after stripping code blocks, try to extract from original
+        # If nothing left after stripping, extract text before any JSON
         if not summary_text:
-            logger.warning("Content was entirely code blocks, using original")
-            summary_text = content.strip()
+            logger.warning("Content was entirely code/JSON, extracting text before JSON")
+            # Try to get any text before the first { or ```
+            match = re.match(r'^(.*?)(?:```|\{)', content, flags=re.DOTALL)
+            if match and match.group(1).strip():
+                summary_text = match.group(1).strip()
+            else:
+                # Last resort: use a generic message
+                summary_text = "[Summary content was in an unrecognized format]"
 
         # Try to extract some structure with simple heuristics
         lines = summary_text.split('\n')
