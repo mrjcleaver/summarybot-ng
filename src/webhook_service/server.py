@@ -151,6 +151,7 @@ class WebhookServer:
                 # Degraded state means some features may not work but service is operational
                 status = engine_health.get("status", "healthy")
 
+                from datetime import datetime
                 return JSONResponse(
                     status_code=200,
                     content={
@@ -158,6 +159,7 @@ class WebhookServer:
                         "version": "2.0.0",
                         "build": build_number,
                         "build_date": build_date,
+                        "server_time": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "services": {
                             "summarization_engine": engine_health.get("status"),
                             "claude_api": engine_health.get("claude_api"),
@@ -169,6 +171,7 @@ class WebhookServer:
                 logger.error(f"Health check failed: {e}")
                 # Even on error, return 200 with unhealthy status
                 # This allows load balancers to distinguish between service down vs degraded
+                from datetime import datetime
                 return JSONResponse(
                     status_code=200,
                     content={
@@ -176,6 +179,7 @@ class WebhookServer:
                         "version": "2.0.0",
                         "build": build_number,
                         "build_date": build_date,
+                        "server_time": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "error": str(e)
                     }
                 )
