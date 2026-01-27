@@ -4,6 +4,7 @@ FastAPI webhook server for Summary Bot NG.
 
 import asyncio
 import logging
+import os
 from typing import Optional
 from contextlib import asynccontextmanager
 
