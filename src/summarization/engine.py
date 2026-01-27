@@ -110,6 +110,7 @@ class SummarizationEngine:
         try:
             # Get custom prompt if configured
             custom_prompt = None
+            prompt_source_info = None
             if self.prompt_resolver and context:
                 try:
                     from ..prompts.models import PromptContext
@@ -130,6 +131,8 @@ class SummarizationEngine:
 
                     # Use custom prompt content as system prompt
                     custom_prompt = resolved.content
+                    # Capture prompt source info for transparency
+                    prompt_source_info = resolved.to_source_info()
                 except Exception as e:
                     # Log error but continue with default prompts
                     import logging
@@ -228,6 +231,10 @@ class SummarizationEngine:
                 "summary_length": options.summary_length.value,
                 "perspective": options.perspective
             })
+
+            # Add prompt source info for transparency
+            if prompt_source_info:
+                summary_result.metadata["prompt_source"] = prompt_source_info
 
             # Check for model fallback and add warning
             fallback_info = getattr(response, 'fallback_info', {})

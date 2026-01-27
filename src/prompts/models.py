@@ -69,10 +69,26 @@ class ResolvedPrompt:
     is_stale: bool = False
     repo_url: Optional[str] = None
     resolved_at: datetime = field(default_factory=datetime.utcnow)
+    # Path tracking for transparency
+    file_path: Optional[str] = None  # The file path that was actually used
+    tried_paths: List[str] = field(default_factory=list)  # All paths tried in order
+    github_file_url: Optional[str] = None  # Full GitHub URL to the file (if from GitHub)
 
     def get_age_seconds(self) -> float:
         """Get age of this resolved prompt in seconds."""
         return (datetime.utcnow() - self.resolved_at).total_seconds()
+
+    def to_source_info(self) -> Dict[str, Any]:
+        """Get prompt source information for API responses."""
+        return {
+            "source": self.source.value,
+            "file_path": self.file_path,
+            "tried_paths": self.tried_paths,
+            "repo_url": self.repo_url,
+            "github_file_url": self.github_file_url,
+            "version": self.version,
+            "is_stale": self.is_stale,
+        }
 
 
 @dataclass

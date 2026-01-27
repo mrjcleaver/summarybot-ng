@@ -184,8 +184,10 @@ class PromptTemplateResolver:
         file_paths = self.path_parser.resolve_paths(path_config, context)
 
         # Try each path until we find a file
+        tried_paths = []
         for file_path in file_paths:
             logger.debug(f"Trying path: {file_path}")
+            tried_paths.append(file_path)
 
             prompt_content = await self.github_client.fetch_file(
                 repo_url=guild_config.repo_url,
@@ -207,12 +209,22 @@ class PromptTemplateResolver:
                     f"Fetched custom prompt from {guild_config.repo_url}/{file_path}"
                 )
 
+                # Build GitHub file URL for transparency
+                github_file_url = self._build_github_file_url(
+                    guild_config.repo_url,
+                    file_path,
+                    guild_config.branch
+                )
+
                 return ResolvedPrompt(
                     content=prompt_content,
                     source=PromptSource.CUSTOM,
                     version=path_config.version.value,
                     repo_url=guild_config.repo_url,
-                    variables=context.to_dict()
+                    variables=context.to_dict(),
+                    file_path=file_path,
+                    tried_paths=tried_paths,
+                    github_file_url=github_file_url
                 )
 
         # No prompt found in any path
@@ -292,3 +304,28 @@ class PromptTemplateResolver:
     def cache_stats(self) -> dict:
         """Get cache statistics."""
         return self.cache_manager.cache_stats
+
+    def _build_github_file_url(
+        self,
+        repo_url: str,
+        file_path: str,
+        branch: str = "main"
+    ) -> str:
+        """
+        Build a full GitHub URL to view a file.
+
+        Args:
+            repo_url: Repository URL (e.g., https://github.com/user/repo)
+            file_path: File path within the repo
+            branch: Branch name
+
+        Returns:
+            Full GitHub URL to the file (e.g., https://github.com/user/repo/blob/main/path/to/file.md)
+        """
+        # Normalize repo URL (remove trailing slash, .git suffix)
+        repo_url = repo_url.rstrip("/")
+        if repo_url.endswith(".git"):
+            repo_url = repo_url[:-4]
+
+        # Build the blob URL
+        return f"{repo_url}/blob/{branch}/{file_path}"

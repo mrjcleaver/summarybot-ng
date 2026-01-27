@@ -269,6 +269,17 @@ class SummaryWarning(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
+class PromptSourceResponse(BaseModel):
+    """Information about where the system prompt came from."""
+    source: str  # "custom", "cached", "default", "fallback"
+    file_path: Optional[str] = None  # File path that was used
+    tried_paths: List[str] = []  # All paths tried in resolution order
+    repo_url: Optional[str] = None  # GitHub repo URL (if custom)
+    github_file_url: Optional[str] = None  # Direct link to file on GitHub
+    version: str = "v1"  # PATH file schema version
+    is_stale: bool = False  # Whether cache was stale
+
+
 class SummaryMetadataResponse(BaseModel):
     """Summary metadata."""
     summary_length: str = "detailed"
@@ -278,6 +289,7 @@ class SummaryMetadataResponse(BaseModel):
     tokens_used: Optional[int] = None
     generation_time_seconds: Optional[float] = None
     warnings: List[SummaryWarning] = []  # Any warnings during generation
+    prompt_source: Optional[PromptSourceResponse] = None  # Prompt resolution info
 
 
 class SummaryDetailResponse(BaseModel):

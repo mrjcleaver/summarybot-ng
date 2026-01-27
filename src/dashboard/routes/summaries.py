@@ -18,6 +18,7 @@ from ..models import (
     TechnicalTermResponse,
     ParticipantResponse,
     SummaryMetadataResponse,
+    PromptSourceResponse,
     GenerateSummaryRequest,
     GenerateSummaryResponse,
     TaskStatusResponse,
@@ -235,6 +236,20 @@ async def get_summary(
     logger.info(f"Summary {summary.id} claude_model: {summary.metadata.get('claude_model')}")
     logger.info(f"Summary {summary.id} total_tokens: {summary.metadata.get('total_tokens')}")
 
+    # Build prompt source info if available
+    prompt_source = None
+    if summary.metadata.get("prompt_source"):
+        ps = summary.metadata["prompt_source"]
+        prompt_source = PromptSourceResponse(
+            source=ps.get("source", "default"),
+            file_path=ps.get("file_path"),
+            tried_paths=ps.get("tried_paths", []),
+            repo_url=ps.get("repo_url"),
+            github_file_url=ps.get("github_file_url"),
+            version=ps.get("version", "v1"),
+            is_stale=ps.get("is_stale", False),
+        )
+
     # Build metadata (engine stores claude_model, requested_model, total_tokens, processing_time)
     metadata = SummaryMetadataResponse(
         summary_length=summary.metadata.get("summary_length", "detailed"),
@@ -244,6 +259,7 @@ async def get_summary(
         tokens_used=summary.metadata.get("total_tokens"),
         generation_time_seconds=summary.metadata.get("processing_time"),
         warnings=warnings,
+        prompt_source=prompt_source,
     )
 
     # Check if prompt data is available

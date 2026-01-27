@@ -52,24 +52,35 @@ class DefaultPromptProvider:
         Returns:
             ResolvedPrompt or None if no matching default
         """
+        tried_paths = []
+
         # Try category-specific prompt first
+        category_file = f"{context.category}.md"
+        tried_paths.append(f"defaults/{category_file}")
         category_prompt = self._cache.get(context.category)
         if category_prompt:
+            file_path = str(self.defaults_dir / category_file)
             return ResolvedPrompt(
                 content=category_prompt,
                 source=PromptSource.DEFAULT,
                 version="v1",
-                variables=context.to_dict()
+                variables=context.to_dict(),
+                file_path=file_path,
+                tried_paths=tried_paths
             )
 
         # Fall back to default.md
+        tried_paths.append("defaults/default.md")
         default_prompt = self._cache.get("default")
         if default_prompt:
+            file_path = str(self.defaults_dir / "default.md")
             return ResolvedPrompt(
                 content=default_prompt,
                 source=PromptSource.DEFAULT,
                 version="v1",
-                variables=context.to_dict()
+                variables=context.to_dict(),
+                file_path=file_path,
+                tried_paths=tried_paths
             )
 
         return None
@@ -83,17 +94,22 @@ class DefaultPromptProvider:
         """
         # Try to use default.md if available
         if "default" in self._cache:
+            file_path = str(self.defaults_dir / "default.md")
             return ResolvedPrompt(
                 content=self._cache["default"],
                 source=PromptSource.FALLBACK,
-                version="v1"
+                version="v1",
+                file_path=file_path,
+                tried_paths=["defaults/default.md"]
             )
 
         # Ultimate fallback - hardcoded
         return ResolvedPrompt(
             content=self._get_hardcoded_fallback(),
             source=PromptSource.FALLBACK,
-            version="v1"
+            version="v1",
+            file_path="<hardcoded>",
+            tried_paths=["defaults/default.md", "<hardcoded>"]
         )
 
     def _get_hardcoded_fallback(self) -> str:
