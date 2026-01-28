@@ -180,21 +180,13 @@ class SummarizationEngine:
             logger.info(f"Summarization engine: summary_length={options.summary_length.value}, model={claude_options.model}, max_tokens={claude_options.max_tokens}")
             logger.info(f"System prompt length: {len(prompt_data.system_prompt)} chars, User prompt length: {len(prompt_data.user_prompt)} chars")
 
-            # Call Claude API - use fallback method for comprehensive summaries
-            from ..models.summary import SummaryLength
-            if options.summary_length == SummaryLength.COMPREHENSIVE:
-                logger.info("Using fallback-enabled API call for comprehensive summary")
-                response = await self.claude_client.create_summary_with_fallback(
-                    prompt=prompt_data.user_prompt,
-                    system_prompt=prompt_data.system_prompt,
-                    options=claude_options
-                )
-            else:
-                response = await self.claude_client.create_summary(
-                    prompt=prompt_data.user_prompt,
-                    system_prompt=prompt_data.system_prompt,
-                    options=claude_options
-                )
+            # Call Claude API with fallback chain for all summary types
+            logger.info("Using fallback-enabled API call for summary")
+            response = await self.claude_client.create_summary_with_fallback(
+                prompt=prompt_data.user_prompt,
+                system_prompt=prompt_data.system_prompt,
+                options=claude_options
+            )
 
             logger.info(f"Claude API response: input_tokens={response.input_tokens}, output_tokens={response.output_tokens}, content_length={len(response.content)}")
 

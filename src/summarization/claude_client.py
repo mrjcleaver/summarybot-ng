@@ -490,16 +490,20 @@ class ClaudeClient:
         Returns:
             True if API is healthy, False otherwise
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
-            # Simple test request (use 5 tokens to avoid OpenRouter credit calculation bug)
+            # Use fallback chain so health check passes as long as ANY model works
             options = ClaudeOptions(max_tokens=5)
-            await self.create_summary(
+            await self.create_summary_with_fallback(
                 prompt="Say hello",
                 system_prompt="You are a helpful assistant.",
                 options=options
             )
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Health check failed: {e}")
             return False
     
     def get_usage_stats(self) -> UsageStats:
